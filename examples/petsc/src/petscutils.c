@@ -95,7 +95,7 @@ static PetscErrorCode CreateBCLabel(DM dm, const char name[]) {
 // This function sets up a DM for a given degree
 // -----------------------------------------------------------------------------
 PetscErrorCode SetupDMByDegree(DM dm, PetscInt degree, PetscInt num_comp_u,
-                               PetscInt dim, bool enforce_bc, BCFunction bc_func) {
+                               PetscInt dim, PetscBool enforce_bc, BCFunction bc_func) {
   PetscInt ierr, marker_ids[1] = {1};
   PetscFE fe;
   MPI_Comm comm;
@@ -134,6 +134,20 @@ PetscErrorCode SetupDMByDegree(DM dm, PetscInt degree, PetscInt num_comp_u,
   CHKERRQ(ierr);
   ierr = PetscFEDestroy(&fe); CHKERRQ(ierr);
 
+  PetscFunctionReturn(0);
+};
+
+// -----------------------------------------------------------------------------
+// This function sets up a BDDC vertex only DM from an existing fine DM
+// -----------------------------------------------------------------------------
+PetscErrorCode SetupVertexDMFromDM(DM dm, DM dm_vertex, PetscInt num_comp_u,
+                                   PetscBool enforce_bc, BCFunction bc_func) {
+  PetscInt ierr, dim;
+
+  PetscFunctionBeginUser;
+  ierr = DMGetDimension(dm, &dim); CHKERRQ(ierr);
+  ierr = SetupDMByDegree(dm_vertex, 1, num_comp_u, dim, enforce_bc, bc_func);
+  CHKERRQ(ierr);
   PetscFunctionReturn(0);
 };
 

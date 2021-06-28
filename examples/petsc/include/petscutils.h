@@ -9,11 +9,12 @@
 CeedMemType MemTypeP2C(PetscMemType mtype);
 PetscErrorCode Kershaw(DM dm_orig, PetscScalar eps);
 typedef PetscErrorCode (*BCFunction)(PetscInt dim, PetscReal time,
-                                     const PetscReal x[],
-                                     PetscInt num_comp_u, PetscScalar *u, void *ctx);
+                                     const PetscReal x[], PetscInt num_comp_u,
+                                     PetscScalar *u, void *ctx);
 PetscErrorCode SetupDMByDegree(DM dm, PetscInt degree, PetscInt num_comp_u,
-                               PetscInt topo_dim,
-                               bool enforce_bc,  BCFunction bc_func);
+                               PetscInt topo_dim, PetscBool enforce_bc, BCFunction bc_func);
+PetscErrorCode SetupVertexDMFromDM(DM dm, DM dm_vertex, PetscInt num_comp_u,
+                                   PetscBool enforce_bc, BCFunction bc_func);
 PetscErrorCode CreateRestrictionFromPlex(Ceed ceed, DM dm, CeedInt height,
     DMLabel domain_label, CeedInt value, CeedElemRestriction *elem_restr);
 

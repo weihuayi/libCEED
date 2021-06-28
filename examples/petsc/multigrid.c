@@ -358,9 +358,9 @@ int main(int argc, char **argv) {
     // Multiplicity
     CeedElemRestrictionGetMultiplicity(ceed_data[i]->elem_restr_u,
                                        ceed_data[i]->x_ceed);
-    CeedVectorSyncArray(ceed_data[i]->x_ceed, CEED_MEM_HOST);
 
     // Restore vector
+    CeedVectorTakeArray(ceed_data[i]->x_ceed, CEED_MEM_HOST, &x);
     ierr = VecRestoreArray(X_loc[i], &x); CHKERRQ(ierr);
 
     // Creat mult vector
