@@ -49,6 +49,8 @@ static int CeedInit_Opt_Blocked(const char *resource, Ceed ceed) {
 
   ierr = CeedSetBackendFunction(ceed, "Ceed", ceed, "Destroy",
                                 CeedDestroy_Opt); CeedChkBackend(ierr);
+  ierr = CeedSetBackendFunction(ceed, "Ceed", ceed, "TensorContractCreate",
+                                CeedTensorContractCreate_Opt); CeedChkBackend(ierr);
   ierr = CeedSetBackendFunction(ceed, "Ceed", ceed, "OperatorCreate",
                                 CeedOperatorCreate_Opt); CeedChkBackend(ierr);
 

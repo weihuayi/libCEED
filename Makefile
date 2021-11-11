@@ -222,6 +222,7 @@ blocked.c      := $(sort $(wildcard backends/blocked/*.c))
 ceedmemcheck.c := $(sort $(wildcard backends/memcheck/*.c))
 opt.c          := $(sort $(wildcard backends/opt/*.c))
 avx.c          := $(sort $(wildcard backends/avx/*.c))
+sve.c          := $(sort $(wildcard backends/sve/*.c))
 xsmm.c         := $(sort $(wildcard backends/xsmm/*.c))
 cuda.c         := $(sort $(wildcard backends/cuda/*.c))
 cuda-ref.c     := $(sort $(wildcard backends/cuda-ref/*.c))
@@ -285,6 +286,7 @@ info:
 	$(info ------------------------------------)
 	$(info MEMCHK_STATUS = $(MEMCHK_STATUS)$(call backend_status,$(MEMCHK_BACKENDS)))
 	$(info AVX_STATUS    = $(AVX_STATUS)$(call backend_status,$(AVX_BACKENDS)))
+	$(info SVE_STATUS    = $(SVE_STATUS)$(call backend_status,$(SVE_BACKENDS)))
 	$(info XSMM_DIR      = $(XSMM_DIR)$(call backend_status,$(XSMM_BACKENDS)))
 	$(info OCCA_DIR      = $(OCCA_DIR)$(call backend_status,$(OCCA_BACKENDS)))
 	$(info MAGMA_DIR     = $(MAGMA_DIR)$(call backend_status,$(MAGMA_BACKENDS)))
@@ -325,7 +327,7 @@ ifeq ($(MEMCHK),1)
   BACKENDS_MAKE += $(MEMCHK_BACKENDS)
 endif
 
-# AVX Backed
+# AVX Backends
 AVX_STATUS = Disabled
 AVX_FLAG := $(if $(filter clang,$(CC_VENDOR)),+avx,-mavx)
 AVX := $(filter $(AVX_FLAG),$(shell $(CC) $(CFLAGS) -v -E -x c /dev/null 2>&1))
@@ -334,6 +336,17 @@ ifneq ($(AVX),)
   AVX_STATUS = Enabled
   libceed.c += $(avx.c)
   BACKENDS_MAKE += $(AVX_BACKENDS)
+endif
+
+# SVE Backends
+SVE_STATUS = Disabled
+SVE_FLAG := $(if $(filter clang,$(CC_VENDOR)),+sve,-msve)
+SVE ?=
+SVE_BACKENDS = /cpu/self/sve/serial /cpu/self/sve/blocked
+ifneq ($(SVE),)
+  SVE_STATUS = Enabled
+  libceed.c += $(sve.c)
+  BACKENDS_MAKE += $(SVE_BACKENDS)
 endif
 
 # Collect list of libraries and paths for use in linking and pkg-config
@@ -415,7 +428,7 @@ ifneq ($(HIP_LIB_DIR),)
   BACKENDS_MAKE += $(HIP_BACKENDS)
 endif
 
-# MAGMA Backend
+# MAGMA Backends
 ifneq ($(wildcard $(MAGMA_DIR)/lib/libmagma.*),)
   MAGMA_ARCH=$(shell nm -g $(MAGMA_DIR)/lib/libmagma.* | grep -c "hipblas")
   ifeq ($(MAGMA_ARCH), 0) #CUDA MAGMA
