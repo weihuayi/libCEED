@@ -70,6 +70,7 @@ CEED_QFUNCTION(PoissonQuadF)(void *ctx, CeedInt Q, const CeedScalar *const *in,
     const CeedScalar detJ = JJ[0][0]*JJ[1][1] - JJ[0][1]*JJ[1][0];
 
     const CeedScalar u1[2]   = {u[0][i], u[1][i]};
+    printf("===u1 %f\n",u1[0]);
     // *INDENT-ON*
     // Piola map: J^T*J*u*w/detJ
     // Compute J^T * J
@@ -110,12 +111,12 @@ CEED_QFUNCTION(SetupRhs)(void *ctx, const CeedInt Q,
                          CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
-  const CeedScalar (*x)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])in[0],
+  const CeedScalar (*x) = in[0],
                    (*w) = in[1],
                    (*J)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[2];
   // Outputs
-  CeedScalar (*true_soln)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])out[0],
-             (*rhs)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])out[1];
+  CeedScalar (*true_soln) = out[0],
+             (*rhs) = out[1];
 
   // *INDENT-ON*
 
@@ -123,16 +124,16 @@ CEED_QFUNCTION(SetupRhs)(void *ctx, const CeedInt Q,
   CeedPragmaSIMD
   for (CeedInt i=0; i<Q; i++) {
     // Component 1
-    true_soln[0][i] = x[0][i] - x[1][i];
+    true_soln[i+0*Q] = x[i] - x[i+Q];
     // Component 2
-    true_soln[1][i] = x[0][i] + x[1][i];
+    true_soln[i+1*Q] = x[i] + x[i+Q];
     // *INDENT-OFF*
     // Setup, JJ = dx/dX
     const CeedScalar JJ[2][2] = {{J[0][0][i], J[1][0][i]},
                                  {J[0][1][i], J[1][1][i]}};
     // *INDENT-ON*
     // Compute J^T*true_soln
-    CeedScalar f[2] = {true_soln[0][i], true_soln[1][i]};
+    CeedScalar f[2] = {true_soln[i+0*Q], true_soln[i+1*Q]};
     CeedScalar rhs1[2];
     for (CeedInt k = 0; k < 2; k++) {
       rhs1[k] = 0;
@@ -140,9 +141,10 @@ CEED_QFUNCTION(SetupRhs)(void *ctx, const CeedInt Q,
         rhs1[k] += JJ[m][k] * f[m];
     }
     // Component 1
-    rhs[0][i] = rhs1[0] * w[i];
+    rhs[i+0*Q] = rhs1[0] * w[i];
     // Component 2
-    rhs[1][i] = rhs1[1] * w[i];
+    rhs[i+1*Q] = rhs1[1] * w[i];
+
   } // End of Quadrature Point Loop
   return 0;
 }

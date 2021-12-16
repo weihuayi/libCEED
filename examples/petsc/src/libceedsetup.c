@@ -83,7 +83,9 @@ PetscErrorCode SetupLibceedByDegree(DM dm, Ceed ceed, CeedInt degree,
   CeedElemRestrictionCreateStrided(ceed, num_elem, num_qpts, q_data_size,
                                    q_data_size*num_elem*num_qpts,
                                    CEED_STRIDES_BACKEND, &elem_restr_qd_i);
-
+  
+  CeedElemRestrictionView(elem_restr_qd_i, stdout);
+  CeedElemRestrictionView(elem_restr_u_i, stdout);
   // Element coordinates
   ierr = DMGetCoordinatesLocal(dm, &coords); CHKERRQ(ierr);
   ierr = VecGetArrayRead(coords, &coord_array); CHKERRQ(ierr);

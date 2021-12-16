@@ -17,21 +17,14 @@ PetscErrorCode CeedDataDestroy(CeedData ceed_data) {
   PetscFunctionBegin;
 
   // Vectors
-  CeedVectorDestroy(&ceed_data->x_ceed);
-  CeedVectorDestroy(&ceed_data->y_ceed);
   CeedVectorDestroy(&ceed_data->geo_data);
   // Restrictions
   CeedElemRestrictionDestroy(&ceed_data->elem_restr_x);
   CeedElemRestrictionDestroy(&ceed_data->elem_restr_u);
   CeedElemRestrictionDestroy(&ceed_data->elem_restr_geo_data_i);
-  CeedElemRestrictionDestroy(&ceed_data->elem_restr_u_i);
   // Bases
   CeedBasisDestroy(&ceed_data->basis_x);
   CeedBasisDestroy(&ceed_data->basis_u);
-  // QFunctions
-  CeedQFunctionDestroy(&ceed_data->qf_residual);
-  // Operators
-  CeedOperatorDestroy(&ceed_data->op_residual);
 
   ierr = PetscFree(ceed_data); CHKERRQ(ierr);
 
@@ -198,8 +191,7 @@ PetscErrorCode CreateRestrictionFromPlexOriented(Ceed ceed, DM dm, CeedInt P,
 PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
                             ProblemData *problem_data,
                             PetscInt U_g_size, PetscInt U_loc_size,
-                            CeedData ceed_data, CeedVector rhs_ceed,
-                            CeedVector *target) {
+                            CeedData ceed_data, CeedVector rhs_ceed) {
   int           ierr;
   CeedInt       P = app_ctx->degree + 1;
   CeedInt       Q = P + 1 + app_ctx->q_extra; // Number of quadratures in 1D
@@ -212,8 +204,6 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   PetscInt      c_start, c_end, num_elem;
   const PetscScalar *coordArray;
   CeedVector    x_coord;
-  CeedQFunction qf_residual;
-  CeedOperator  op_residual;
 
   PetscFunctionBeginUser;
   // ---------------------------------------------------------------------------
@@ -250,17 +240,13 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   CeedElemRestrictionCreateStrided(ceed, num_elem, num_qpts, geo_data_size,
                                    num_elem*num_qpts*geo_data_size,
                                    CEED_STRIDES_BACKEND, &ceed_data->elem_restr_geo_data_i);
-  CeedElemRestrictionCreateStrided(ceed, num_elem, num_qpts, num_comp_u,
-                                   num_comp_u*num_elem*num_qpts,
-                                   CEED_STRIDES_BACKEND, &ceed_data->elem_restr_u_i);
+
   printf("----elem_restr_x:\n");
   CeedElemRestrictionView(ceed_data->elem_restr_x, stdout);
   printf("----elem_restr_u:\n");
   CeedElemRestrictionView(ceed_data->elem_restr_u, stdout);
   printf("----elem_restr_geo_data_i:\n");
   CeedElemRestrictionView(ceed_data->elem_restr_geo_data_i, stdout);
-  printf("----elem_restr_u_i:\n");
-  CeedElemRestrictionView(ceed_data->elem_restr_u_i, stdout);
 
   // ---------------------------------------------------------------------------
   // Element coordinates
@@ -277,84 +263,21 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   // Persistent libCEED vectors
   // ---------------------------------------------------------------------------
   // -- Operator action variables
-  CeedVectorCreate(ceed, U_loc_size, &ceed_data->x_ceed);
-  CeedVectorCreate(ceed, U_loc_size, &ceed_data->y_ceed);
-  /*
-  // -- Geometric data vector
-  CeedVectorCreate(ceed, num_elem*num_qpts*geo_data_size,
-                   &ceed_data->geo_data);
-
-  // ---------------------------------------------------------------------------
-  // Geometric factor computation
-  // ---------------------------------------------------------------------------
-  // Create the QFunction and Operator that computes the quadrature data
-  //   geo_data returns dXdx_i,j and w * det.
-  // ---------------------------------------------------------------------------
-  // -- QFunction
-  CeedQFunctionCreateInterior(ceed, 1, problem_data->setup_geo,
-                              problem_data->setup_geo_loc, &qf_setup_geo);
-  CeedQFunctionAddInput(qf_setup_geo, "weight", 1, CEED_EVAL_WEIGHT);
-  CeedQFunctionAddInput(qf_setup_geo, "dx", dim*dim, CEED_EVAL_GRAD);
-  CeedQFunctionAddOutput(qf_setup_geo, "geo_data", geo_data_size, CEED_EVAL_NONE);
-  // -- Operator
-  CeedOperatorCreate(ceed, qf_setup_geo, CEED_QFUNCTION_NONE,
-                     CEED_QFUNCTION_NONE, &op_setup_geo);
-  CeedOperatorSetField(op_setup_geo, "weight", CEED_ELEMRESTRICTION_NONE,
-                       ceed_data->basis_x, CEED_VECTOR_NONE);
-  CeedOperatorSetField(op_setup_geo, "dx", ceed_data->elem_restr_x,
-                       ceed_data->basis_x, CEED_VECTOR_ACTIVE);
-  CeedOperatorSetField(op_setup_geo, "geo_data",
-                       ceed_data->elem_restr_geo_data_i,
-                       CEED_BASIS_COLLOCATED, CEED_VECTOR_ACTIVE);
-  // -- Compute the quadrature data
-  CeedOperatorApply(op_setup_geo, x_coord, ceed_data->geo_data,
-                    CEED_REQUEST_IMMEDIATE);
-  // -- Cleanup
-  CeedQFunctionDestroy(&qf_setup_geo);
-  CeedOperatorDestroy(&op_setup_geo);
-  */
-  // ---------------------------------------------------------------------------
-  // Local residual evaluator
-  // ---------------------------------------------------------------------------
-  // Create the QFunction and Operator that computes the residual of the PDE.
-  // ---------------------------------------------------------------------------
-  // -- QFunction
-  CeedQFunctionCreateInterior(ceed, 1, problem_data->residual,
-                              problem_data->residual_loc, &qf_residual);
-  CeedQFunctionAddInput(qf_residual, "weight", 1, CEED_EVAL_WEIGHT);
-  CeedQFunctionAddInput(qf_residual, "dx", dim*dim, CEED_EVAL_GRAD);
-  CeedQFunctionAddInput(qf_residual, "u", num_comp_u, CEED_EVAL_INTERP);
-  CeedQFunctionAddOutput(qf_residual, "v", num_comp_u, CEED_EVAL_INTERP);
-
-  // -- Operator
-  CeedOperatorCreate(ceed, qf_residual, CEED_QFUNCTION_NONE, CEED_QFUNCTION_NONE,
-                     &op_residual);
-  CeedOperatorSetField(op_residual, "weight", CEED_ELEMRESTRICTION_NONE,
-                       ceed_data->basis_x, CEED_VECTOR_NONE);
-  CeedOperatorSetField(op_residual, "dx", ceed_data->elem_restr_x,
-                       ceed_data->basis_x, CEED_VECTOR_ACTIVE);
-  CeedOperatorSetField(op_residual, "u", ceed_data->elem_restr_u,
-                       ceed_data->basis_u, CEED_VECTOR_ACTIVE);
-  CeedOperatorSetField(op_residual, "v", ceed_data->elem_restr_u,
-                       ceed_data->basis_u, CEED_VECTOR_ACTIVE);
-
-  // -- Save libCEED data
-  ceed_data->qf_residual = qf_residual;
-  ceed_data->op_residual = op_residual;
+  //CeedVectorCreate(ceed, U_loc_size, &ceed_data->x_ceed);
+  //CeedVectorCreate(ceed, U_loc_size, &ceed_data->y_ceed);
+ 
   // ---------------------------------------------------------------------------
   // Setup RHS and true solution
   // ---------------------------------------------------------------------------
   CeedQFunction qf_setup_rhs;
   CeedOperator op_setup_rhs;
-  CeedVectorCreate(ceed, num_elem*num_qpts*num_comp_u, target);
   // Create the q-function that sets up the RHS and true solution
   CeedQFunctionCreateInterior(ceed, 1, problem_data->setup_rhs,
                               problem_data->setup_rhs_loc, &qf_setup_rhs);
   CeedQFunctionAddInput(qf_setup_rhs, "x", num_comp_x, CEED_EVAL_INTERP);
   CeedQFunctionAddInput(qf_setup_rhs, "weight", 1, CEED_EVAL_WEIGHT);
   CeedQFunctionAddInput(qf_setup_rhs, "dx", dim*dim, CEED_EVAL_GRAD);
-  CeedQFunctionAddOutput(qf_setup_rhs, "true_soln", num_comp_u, CEED_EVAL_NONE);
-  CeedQFunctionAddOutput(qf_setup_rhs, "rhs", num_comp_u, CEED_EVAL_INTERP);
+  CeedQFunctionAddOutput(qf_setup_rhs, "rhs", dim, CEED_EVAL_INTERP);
   // Create the operator that builds the RHS and true solution
   CeedOperatorCreate(ceed, qf_setup_rhs, NULL, NULL, &op_setup_rhs);
   CeedOperatorSetField(op_setup_rhs, "x", ceed_data->elem_restr_x,
@@ -363,8 +286,6 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
                        ceed_data->basis_x, CEED_VECTOR_NONE);
   CeedOperatorSetField(op_setup_rhs, "dx", ceed_data->elem_restr_x,
                        ceed_data->basis_x, CEED_VECTOR_ACTIVE);
-  CeedOperatorSetField(op_setup_rhs, "true_soln", ceed_data->elem_restr_u_i,
-                       CEED_BASIS_COLLOCATED, *target);
   CeedOperatorSetField(op_setup_rhs, "rhs", ceed_data->elem_restr_u,
                        ceed_data->basis_u, CEED_VECTOR_ACTIVE);
 

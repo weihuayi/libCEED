@@ -63,8 +63,8 @@ struct User_ {
 
 // Problem specific data
 typedef struct {
-  CeedQFunctionUser residual, setup_rhs;
-  const char       *residual_loc, *setup_rhs_loc;
+  CeedQFunctionUser setup_rhs;
+  const char        *setup_rhs_loc;
   CeedQuadMode      quadrature_mode;
   CeedInt           geo_data_size, elem_node;
   PetscErrorCode    (*setup_ctx)(Ceed, CeedData, Physics);
