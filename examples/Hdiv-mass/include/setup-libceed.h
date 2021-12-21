@@ -10,11 +10,13 @@ PetscErrorCode CeedDataDestroy(CeedData ceed_data);
 // Utility function - essential BC dofs are encoded in closure indices as -(i+1)
 PetscInt Involute(PetscInt i);
 // Utility function to create local CEED restriction from DMPlex
-PetscErrorCode CreateRestrictionFromPlex(Ceed ceed, DM dm, CeedInt P,
-    CeedInt topo_dim, CeedElemRestriction *elem_restr);
+PetscErrorCode CreateRestrictionFromPlex(Ceed ceed, DM dm,
+    CeedInt height, DMLabel domain_label, CeedInt value, CeedInt P,
+    CeedElemRestriction *elem_restr);
 // Utility function to create local CEED Oriented restriction from DMPlex
-PetscErrorCode CreateRestrictionFromPlexOriented(Ceed ceed, DM dm, CeedInt P,
-    CeedInt topo_dim, CeedElemRestriction *elem_restr_oriented);
+PetscErrorCode CreateRestrictionFromPlexOriented(Ceed ceed, DM dm,
+    CeedInt height, DMLabel domain_label, CeedInt value, CeedInt P,
+    CeedElemRestriction *elem_restr_oriented);
 // Set up libCEED for a given degree
 PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
                             ProblemData *problem_data,

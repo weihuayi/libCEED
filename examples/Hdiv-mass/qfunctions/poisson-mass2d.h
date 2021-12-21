@@ -17,60 +17,69 @@
 /// @file
 /// Mixed poisson 2D quad element using PETSc
 
-#ifndef POISSON_RHS2D_H
-#define POISSON_RHS2D_H
+#ifndef POISSON_MASS2D_H
+#define POISSON_MASS2D_H
 
 #include <math.h>
 
 // -----------------------------------------------------------------------------
-// This QFunction sets up the rhs for the problem
+// This QFunction applies the mass operator for a vector field of 2 components.
+//
 // Inputs:
-//   x     - interpolation of the physical coordinate
 //   w     - weight of quadrature
 //   J     - dx/dX. x physical coordinate, X reference coordinate [-1,1]^dim
+//   u     - Input basis at quadrature points
 //
 // Output:
-//   rhs       - Output vector (test functions) at quadrature points
+//   v     - Output vector (test functions) at quadrature points
 // Note we need to apply Piola map on the basis, which is J*u/detJ
-// So (v,ue) = \int (v^T * ue detJ*w) ==> \int (v^T J^T* ue * w)
+// So (v,u) = \int (v^T * u detJ*w) ==> \int (v^T J^T*J*u*w/detJ)
 // -----------------------------------------------------------------------------
-CEED_QFUNCTION(SetupRhs)(void *ctx, const CeedInt Q,
-                         const CeedScalar *const *in,
-                         CeedScalar *const *out) {
+CEED_QFUNCTION(SetupMass)(void *ctx, CeedInt Q, const CeedScalar *const *in,
+                          CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
-  const CeedScalar (*x) = in[0],
-                   (*w) = in[1],
-                   (*J)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[2];
+  const CeedScalar (*w) = in[0],
+                   (*J)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[1],
+                   (*u)[CEED_Q_VLA] = (const CeedScalar(*)[CEED_Q_VLA])in[2];
+
   // Outputs
-  //CeedScalar (*rhs)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])out[0];
-  CeedScalar (*rhs) = out[0];
+  CeedScalar (*v)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])out[0];
+  // *INDENT-ON*
 
   // Quadrature Point Loop
-  //printf("--------------------\n");
-  //printf("inside qfunction poisson-rhs2d.h CEED_Q_VLA: %d, Q: %d \n",CEED_Q_VLA, Q);
-  //printf("--------------------\n");
   CeedPragmaSIMD
   for (CeedInt i=0; i<Q; i++) {
+    //printf("u1 %f\n",u[0][i]);
+    // *INDENT-OFF*
     // Setup, JJ = dx/dX
     const CeedScalar JJ[2][2] = {{J[0][0][i], J[1][0][i]},
                                  {J[0][1][i], J[1][1][i]}};
+    const CeedScalar detJ = JJ[0][0]*JJ[1][1] - JJ[0][1]*JJ[1][0];
+
+    const CeedScalar u1[2]   = {u[0][i], u[1][i]};
     // *INDENT-ON*
-    // Compute J^T*ue
-    CeedScalar ue[2] = {x[i] - x[i+1*Q], x[i] + x[i+1*Q]};
-    CeedScalar rhs1[2];
-    for (CeedInt k = 0; k < 2; k++) {
-      rhs1[k] = 0;
-      for (CeedInt m = 0; m < 2; m++)
-        rhs1[k] += JJ[m][k] * ue[m];
+    // Piola map: J^T*J*u*w/detJ
+    // 1) Compute J^T * J
+    CeedScalar JTJ[2][2];
+    for (CeedInt j = 0; j < 2; j++) {
+      for (CeedInt k = 0; k < 2; k++) {
+        JTJ[j][k] = 0;
+        for (CeedInt m = 0; m < 2; m++)
+          JTJ[j][k] += JJ[m][j] * JJ[m][k];
+      }
     }
-    // Component 1
-    rhs[i+0*Q] = rhs1[0] * w[i];
-    // Component 2
-    rhs[i+1*Q] = rhs1[1] * w[i];
+    // 2) Compute Piola map J^T*J*u * w /detJ
+    for (CeedInt k = 0; k < 2; k++) {
+      v[k][i] = 0;
+      for (CeedInt m = 0; m < 2; m++)
+        v[k][i] += JTJ[k][m] * u1[m] * w[i]/detJ;
+    }
   } // End of Quadrature Point Loop
+
   return 0;
 }
+
 // -----------------------------------------------------------------------------
 
-#endif //End of POISSON_RHS2D_H
+#endif //End of POISSON_MASS2D_H

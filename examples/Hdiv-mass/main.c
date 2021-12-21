@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
   // ---------------------------------------------------------------------------
   // -- Initialize backend
   Ceed ceed;
-  CeedInit("/cpu/self/ref/serial", &ceed);
+  CeedInit("/cpu/self/opt/serial", &ceed);
   CeedMemType mem_type_backend;
   CeedGetPreferredMemType(ceed, &mem_type_backend);
   // ---------------------------------------------------------------------------
@@ -73,7 +73,21 @@ int main(int argc, char **argv) {
   VecType        vec_type;
   ierr = CreateDistributedDM(comm, &dm); CHKERRQ(ierr);
   ierr = DMGetVecType(dm, &vec_type); CHKERRQ(ierr);
-
+  if (!vec_type) { // Not yet set by user -dm_vec_type
+    switch (mem_type_backend) {
+    case CEED_MEM_HOST: vec_type = VECSTANDARD; break;
+    case CEED_MEM_DEVICE: {
+      const char *resolved;
+      CeedGetResource(ceed, &resolved);
+      if (strstr(resolved, "/gpu/cuda")) vec_type = VECCUDA;
+      else if (strstr(resolved, "/gpu/hip/occa"))
+        vec_type = VECSTANDARD; // https://github.com/CEED/libCEED/issues/678
+      else if (strstr(resolved, "/gpu/hip")) vec_type = VECHIP;
+      else vec_type = VECSTANDARD;
+    }
+    }
+    ierr = DMSetVecType(dm, vec_type); CHKERRQ(ierr);
+  }
   // ---------------------------------------------------------------------------
   // Create global, local solution, local rhs vector
   // ---------------------------------------------------------------------------
@@ -99,25 +113,66 @@ int main(int argc, char **argv) {
   ierr = VecGetArrayAndMemType(rhs_loc, &r, &mem_type); CHKERRQ(ierr);
   CeedVectorCreate(ceed, U_l_size, &rhs_ceed);
   CeedVectorSetArray(rhs_ceed, MemTypeP2C(mem_type), CEED_USE_POINTER, r);
-
   // ---------------------------------------------------------------------------
   // Setup libCEED
   // ---------------------------------------------------------------------------
   // -- Set up libCEED objects
   ierr = SetupLibceed(dm, ceed, app_ctx, problem_data, U_g_size,
-                      U_loc_size, ceed_data, rhs_ceed);
-  CHKERRQ(ierr);
-
+                      U_loc_size, ceed_data, rhs_ceed); CHKERRQ(ierr);
+  //CeedVectorView(rhs_ceed, "%12.8f", stdout);
   // ---------------------------------------------------------------------------
   // Gather RHS
   // ---------------------------------------------------------------------------
   Vec rhs;
-  ierr = VecDuplicate(U_g, &rhs); CHKERRQ(ierr);
   CeedVectorTakeArray(rhs_ceed, MemTypeP2C(mem_type), NULL);
   ierr = VecRestoreArrayAndMemType(rhs_loc, &r); CHKERRQ(ierr);
+  ierr = VecDuplicate(U_g, &rhs); CHKERRQ(ierr);
   ierr = VecZeroEntries(rhs); CHKERRQ(ierr);
   ierr = DMLocalToGlobal(dm, rhs_loc, ADD_VALUES, rhs); CHKERRQ(ierr);
-  
+  // ---------------------------------------------------------------------------
+  // Setup Mat, KSP
+  // ---------------------------------------------------------------------------
+  user->comm = comm;
+  user->dm = dm;
+  user->X_loc = U_loc;
+  ierr = VecDuplicate(U_loc, &user->Y_loc); CHKERRQ(ierr);
+  user->x_ceed = ceed_data->x_ceed;
+  user->y_ceed = ceed_data->y_ceed;
+  user->op = ceed_data->op_residual;
+  user->ceed = ceed;
+  // Operator
+  Mat mat;
+  ierr = MatCreateShell(comm, U_l_size, U_l_size, U_g_size, U_g_size,
+                        user, &mat); CHKERRQ(ierr);
+  ierr = MatShellSetOperation(mat, MATOP_MULT,
+                              (void(*)(void))MatMult_Ceed); CHKERRQ(ierr);
+  ierr = MatShellSetVecType(mat, vec_type); CHKERRQ(ierr);
+
+  KSP ksp;
+  ierr = KSPCreate(comm, &ksp); CHKERRQ(ierr);
+  ierr = KSPSetOperators(ksp, mat, mat); CHKERRQ(ierr);
+  ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
+  ierr = KSPSetUp(ksp); CHKERRQ(ierr);
+  ierr = KSPSolve(ksp, rhs, U_g); CHKERRQ(ierr);
+
+  // Output results
+  KSPType ksp_type;
+  KSPConvergedReason reason;
+  PetscReal rnorm;
+  PetscInt its;
+  ierr = KSPGetType(ksp, &ksp_type); CHKERRQ(ierr);
+  ierr = KSPGetConvergedReason(ksp, &reason); CHKERRQ(ierr);
+  ierr = KSPGetIterationNumber(ksp, &its); CHKERRQ(ierr);
+  ierr = KSPGetResidualNorm(ksp, &rnorm); CHKERRQ(ierr);
+  ierr = PetscPrintf(comm,
+                     "  KSP:\n"
+                     "    KSP Type                           : %s\n"
+                     "    KSP Convergence                    : %s\n"
+                     "    Total KSP Iterations               : %D\n"
+                     "    Final rnorm                        : %e\n",
+                     ksp_type, KSPConvergedReasons[reason], its,
+                     (double)rnorm); CHKERRQ(ierr);
+
   // ---------------------------------------------------------------------------
   // Free objects
   // ---------------------------------------------------------------------------
@@ -128,6 +183,9 @@ int main(int argc, char **argv) {
   ierr = VecDestroy(&U_loc); CHKERRQ(ierr);
   ierr = VecDestroy(&rhs); CHKERRQ(ierr);
   ierr = VecDestroy(&rhs_loc); CHKERRQ(ierr);
+  ierr = VecDestroy(&user->Y_loc); CHKERRQ(ierr);
+  ierr = MatDestroy(&mat); CHKERRQ(ierr);
+  ierr = KSPDestroy(&ksp); CHKERRQ(ierr);
 
   // -- Function list
   ierr = PetscFunctionListDestroy(&app_ctx->problems); CHKERRQ(ierr);

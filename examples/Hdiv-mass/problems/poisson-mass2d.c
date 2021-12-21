@@ -20,8 +20,10 @@
 #include "../include/setup-libceed.h"
 #include "../include/problems.h"
 #include "../qfunctions/poisson-rhs2d.h"
-// Hdiv_POISSON_QUAD2D is registered in cl-option.c
-PetscErrorCode Hdiv_POISSON_QUAD2D(ProblemData *problem_data, void *ctx) {
+#include "../qfunctions/poisson-mass2d.h"
+
+// Hdiv_POISSON_MASS2D is registered in cl-option.c
+PetscErrorCode Hdiv_POISSON_MASS2D(ProblemData *problem_data, void *ctx) {
   User              user = *(User *)ctx;
   MPI_Comm          comm = PETSC_COMM_WORLD;
   PetscInt          ierr;
@@ -37,6 +39,8 @@ PetscErrorCode Hdiv_POISSON_QUAD2D(ProblemData *problem_data, void *ctx) {
   problem_data->quadrature_mode         = CEED_GAUSS;
   problem_data->setup_rhs               = SetupRhs;
   problem_data->setup_rhs_loc           = SetupRhs_loc;
+  problem_data->residual                = SetupMass;
+  problem_data->residual_loc            = SetupMass_loc;
 
   // ------------------------------------------------------
   //              Command line Options
