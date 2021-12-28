@@ -222,7 +222,7 @@ static inline int CeedOperatorInputBasis_Ref(CeedInt e, CeedInt Q,
     CeedInt num_input_fields, const bool skip_active,
     CeedScalar *e_data_full[2*CEED_FIELD_MAX], CeedOperator_Ref *impl) {
   CeedInt ierr;
-  CeedInt dim, elem_size, size;
+  CeedInt elem_size, size, num_comp;
   CeedElemRestriction elem_restr;
   CeedEvalMode eval_mode;
   CeedBasis basis;
@@ -255,8 +255,10 @@ static inline int CeedOperatorInputBasis_Ref(CeedInt e, CeedInt Q,
     case CEED_EVAL_INTERP:
       ierr = CeedOperatorFieldGetBasis(op_input_fields[i], &basis);
       CeedChkBackend(ierr);
+      ierr = CeedBasisGetNumComponents(basis, &num_comp);
+      CeedChkBackend(ierr);
       ierr = CeedVectorSetArray(impl->e_vecs_in[i], CEED_MEM_HOST,
-                                CEED_USE_POINTER, &e_data_full[i][e*elem_size*size]);
+                                CEED_USE_POINTER, &e_data_full[i][e*elem_size*num_comp]);
       CeedChkBackend(ierr);
       ierr = CeedBasisApply(basis, 1, CEED_NOTRANSPOSE, CEED_EVAL_INTERP,
                             impl->e_vecs_in[i], impl->q_vecs_in[i]); CeedChkBackend(ierr);
@@ -264,9 +266,10 @@ static inline int CeedOperatorInputBasis_Ref(CeedInt e, CeedInt Q,
     case CEED_EVAL_GRAD:
       ierr = CeedOperatorFieldGetBasis(op_input_fields[i], &basis);
       CeedChkBackend(ierr);
-      ierr = CeedBasisGetDimension(basis, &dim); CeedChkBackend(ierr);
+      ierr = CeedBasisGetNumComponents(basis, &num_comp);
+      CeedChkBackend(ierr);
       ierr = CeedVectorSetArray(impl->e_vecs_in[i], CEED_MEM_HOST,
-                                CEED_USE_POINTER, &e_data_full[i][e*elem_size*size/dim]);
+                                CEED_USE_POINTER, &e_data_full[i][e*elem_size*num_comp]);
       CeedChkBackend(ierr);
       ierr = CeedBasisApply(basis, 1, CEED_NOTRANSPOSE,
                             CEED_EVAL_GRAD, impl->e_vecs_in[i],
@@ -298,20 +301,18 @@ static inline int CeedOperatorOutputBasis_Ref(CeedInt e, CeedInt Q,
     CeedInt num_input_fields, CeedInt num_output_fields, CeedOperator op,
     CeedScalar *e_data_full[2*CEED_FIELD_MAX], CeedOperator_Ref *impl) {
   CeedInt ierr;
-  CeedInt dim, elem_size, size;
+  CeedInt dim, elem_size, num_comp;
   CeedElemRestriction elem_restr;
   CeedEvalMode eval_mode;
   CeedBasis basis;
 
   for (CeedInt i=0; i<num_output_fields; i++) {
-    // Get elem_size, eval_mode, size
+    // Get elem_size, eval_mode
     ierr = CeedOperatorFieldGetElemRestriction(op_output_fields[i], &elem_restr);
     CeedChkBackend(ierr);
     ierr = CeedElemRestrictionGetElementSize(elem_restr, &elem_size);
     CeedChkBackend(ierr);
     ierr = CeedQFunctionFieldGetEvalMode(qf_output_fields[i], &eval_mode);
-    CeedChkBackend(ierr);
-    ierr = CeedQFunctionFieldGetSize(qf_output_fields[i], &size);
     CeedChkBackend(ierr);
     // Basis action
     switch(eval_mode) {
@@ -320,9 +321,11 @@ static inline int CeedOperatorOutputBasis_Ref(CeedInt e, CeedInt Q,
     case CEED_EVAL_INTERP:
       ierr = CeedOperatorFieldGetBasis(op_output_fields[i], &basis);
       CeedChkBackend(ierr);
+      ierr = CeedBasisGetNumComponents(basis, &num_comp);
+      CeedChkBackend(ierr);
       ierr = CeedVectorSetArray(impl->e_vecs_out[i], CEED_MEM_HOST,
                                 CEED_USE_POINTER,
-                                &e_data_full[i + num_input_fields][e*elem_size*size]);
+                                &e_data_full[i + num_input_fields][e*elem_size*num_comp]);
       CeedChkBackend(ierr);
       ierr = CeedBasisApply(basis, 1, CEED_TRANSPOSE,
                             CEED_EVAL_INTERP, impl->q_vecs_out[i],
@@ -331,10 +334,12 @@ static inline int CeedOperatorOutputBasis_Ref(CeedInt e, CeedInt Q,
     case CEED_EVAL_GRAD:
       ierr = CeedOperatorFieldGetBasis(op_output_fields[i], &basis);
       CeedChkBackend(ierr);
+      ierr = CeedBasisGetNumComponents(basis, &num_comp);
+      CeedChkBackend(ierr);
       ierr = CeedBasisGetDimension(basis, &dim); CeedChkBackend(ierr);
       ierr = CeedVectorSetArray(impl->e_vecs_out[i], CEED_MEM_HOST,
                                 CEED_USE_POINTER,
-                                &e_data_full[i + num_input_fields][e*elem_size*size/dim]);
+                                &e_data_full[i + num_input_fields][e*elem_size*num_comp]);
       CeedChkBackend(ierr);
       ierr = CeedBasisApply(basis, 1, CEED_TRANSPOSE,
                             CEED_EVAL_GRAD, impl->q_vecs_out[i],

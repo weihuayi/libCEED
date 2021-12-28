@@ -82,13 +82,26 @@ static int CeedOperatorCheckField(Ceed ceed, CeedQFunctionField qf_field,
   // Field size
   switch(eval_mode) {
   case CEED_EVAL_NONE:
-    if (size != restr_num_comp)
-      // LCOV_EXCL_START
-      return CeedError(ceed, CEED_ERROR_DIMENSION,
-                       "Field '%s' of size %d and EvalMode %s: ElemRestriction has %d components",
-                       qf_field->field_name, qf_field->size, CeedEvalModes[qf_field->eval_mode],
-                       restr_num_comp);
-    // LCOV_EXCL_STOP
+    switch (b->basis_space) {
+    case 1: // H^1 discretization
+      if (size != restr_num_comp)
+        // LCOV_EXCL_START
+        return CeedError(ceed, CEED_ERROR_DIMENSION,
+                         "Field '%s' of size %d and EvalMode %s: ElemRestriction has %d components",
+                         qf_field->field_name, qf_field->size, CeedEvalModes[qf_field->eval_mode],
+                         restr_num_comp);
+      // LCOV_EXCL_STOP
+      break;
+    case 2: // H(div) discretization
+      if (size != dim)
+        // LCOV_EXCL_START
+        return CeedError(ceed, CEED_ERROR_DIMENSION,
+                         "Field '%s' of size %d and EvalMode %s: ElemRestriction/Basis has %d components",
+                         qf_field->field_name, qf_field->size, CeedEvalModes[qf_field->eval_mode],
+                         dim);
+      // LCOV_EXCL_STOP
+      break;
+    }
     break;
   case CEED_EVAL_INTERP:
     switch (b->basis_space) {
