@@ -458,6 +458,8 @@ CEED_EXTERN int CeedElemRestrictionGetNumElements(CeedElemRestriction rstr,
     CeedInt *num_elem);
 CEED_EXTERN int CeedElemRestrictionGetElementSize(CeedElemRestriction rstr,
     CeedInt *elem_size);
+CEED_EXTERN int CeedElemRestrictionGetScale(CeedElemRestriction rstr,
+    CeedScalar *scale);
 CEED_EXTERN int CeedElemRestrictionGetLVectorSize(CeedElemRestriction rstr,
     CeedSize *l_size);
 CEED_EXTERN int CeedElemRestrictionGetNumComponents(CeedElemRestriction rstr,

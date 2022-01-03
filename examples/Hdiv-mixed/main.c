@@ -73,7 +73,21 @@ int main(int argc, char **argv) {
   VecType        vec_type;
   ierr = CreateDistributedDM(comm, &dm); CHKERRQ(ierr);
   ierr = DMGetVecType(dm, &vec_type); CHKERRQ(ierr);
-
+  if (!vec_type) { // Not yet set by user -dm_vec_type
+    switch (mem_type_backend) {
+    case CEED_MEM_HOST: vec_type = VECSTANDARD; break;
+    case CEED_MEM_DEVICE: {
+      const char *resolved;
+      CeedGetResource(ceed, &resolved);
+      if (strstr(resolved, "/gpu/cuda")) vec_type = VECCUDA;
+      else if (strstr(resolved, "/gpu/hip/occa"))
+        vec_type = VECSTANDARD; // https://github.com/CEED/libCEED/issues/678
+      else if (strstr(resolved, "/gpu/hip")) vec_type = VECHIP;
+      else vec_type = VECSTANDARD;
+    }
+    }
+    ierr = DMSetVecType(dm, vec_type); CHKERRQ(ierr);
+  }
   // ---------------------------------------------------------------------------
   // Create global, local solution, local rhs vector
   // ---------------------------------------------------------------------------
@@ -89,15 +103,6 @@ int main(int argc, char **argv) {
   // Local size for libCEED
   ierr = VecGetSize(U_loc, &U_loc_size); CHKERRQ(ierr);
 
-  // Operator
-  Mat mat;
-  ierr = MatCreateShell(comm, U_l_size, U_l_size, U_g_size, U_g_size,
-                        user, &mat); CHKERRQ(ierr);
-  ierr = MatShellSetOperation(mat, MATOP_MULT,
-                              (void(*)(void))MatMult_Ceed); CHKERRQ(ierr);
-  ierr = MatShellSetOperation(mat, MATOP_GET_DIAGONAL,
-                              (void(*)(void))MatGetDiag); CHKERRQ(ierr);
-  ierr = MatShellSetVecType(mat, vec_type); CHKERRQ(ierr);
   // Get RHS vector
   Vec rhs_loc;
   PetscScalar *r;
@@ -108,25 +113,37 @@ int main(int argc, char **argv) {
   ierr = VecGetArrayAndMemType(rhs_loc, &r, &mem_type); CHKERRQ(ierr);
   CeedVectorCreate(ceed, U_l_size, &rhs_ceed);
   CeedVectorSetArray(rhs_ceed, MemTypeP2C(mem_type), CEED_USE_POINTER, r);
+  // Get True vector
+  Vec true_loc;
+  PetscScalar *t;
+  CeedVector true_ceed;
+  PetscMemType t_mem_type;
+  ierr = VecDuplicate(U_loc, &true_loc); CHKERRQ(ierr);
+  ierr = VecZeroEntries(true_loc); CHKERRQ(ierr);
+  ierr = VecGetArrayAndMemType(true_loc, &t, &t_mem_type); CHKERRQ(ierr);
+  CeedVectorCreate(ceed, U_l_size, &true_ceed);
+  CeedVectorSetArray(true_ceed, MemTypeP2C(t_mem_type), CEED_USE_POINTER, t);
 
   // ---------------------------------------------------------------------------
   // Setup libCEED
   // ---------------------------------------------------------------------------
   // -- Set up libCEED objects
   ierr = SetupLibceed(dm, ceed, app_ctx, problem_data, U_g_size,
-                      U_loc_size, ceed_data, rhs_ceed, &target);
-  CHKERRQ(ierr);
-  // -- Set up context for QFunctions
-  ierr = problem_data->setup_ctx(ceed, ceed_data, phys_ctx);
-  CHKERRQ(ierr);
+                      U_loc_size, ceed_data, rhs_ceed, &target, true_ceed); CHKERRQ(ierr);
+  //printf("== target:\n");
+  //CeedVectorView(target, "%12.8f", stdout);
+  //printf("------------------------------------------------------------\n");
+  //printf("True solution projected into H(div) space; main.c:\n");
+  //printf("------------------------------------------------------------\n");
+  //CeedVectorView(true_ceed, "%12.8f", stdout);
 
   // ---------------------------------------------------------------------------
   // Gather RHS
   // ---------------------------------------------------------------------------
   Vec rhs;
-  ierr = VecDuplicate(U_g, &rhs); CHKERRQ(ierr);
   CeedVectorTakeArray(rhs_ceed, MemTypeP2C(mem_type), NULL);
   ierr = VecRestoreArrayAndMemType(rhs_loc, &r); CHKERRQ(ierr);
+  ierr = VecDuplicate(U_g, &rhs); CHKERRQ(ierr);
   ierr = VecZeroEntries(rhs); CHKERRQ(ierr);
   ierr = DMLocalToGlobal(dm, rhs_loc, ADD_VALUES, rhs); CHKERRQ(ierr);
   // ---------------------------------------------------------------------------
@@ -138,22 +155,58 @@ int main(int argc, char **argv) {
   ierr = VecDuplicate(U_loc, &user->Y_loc); CHKERRQ(ierr);
   user->x_ceed = ceed_data->x_ceed;
   user->y_ceed = ceed_data->y_ceed;
-  user->op = ceed_data->op_residual;
+  user->op_apply = ceed_data->op_residual;
+  user->op_error = ceed_data->op_error;
   user->ceed = ceed;
-  // Ksp
+  // Operator
+  Mat mat;
+  ierr = MatCreateShell(comm, U_l_size, U_l_size, U_g_size, U_g_size,
+                        user, &mat); CHKERRQ(ierr);
+  ierr = MatShellSetOperation(mat, MATOP_MULT,
+                              (void(*)(void))MatMult_Ceed); CHKERRQ(ierr);
+  ierr = MatShellSetVecType(mat, vec_type); CHKERRQ(ierr);
+
   KSP ksp;
-  PC pc;
   ierr = KSPCreate(comm, &ksp); CHKERRQ(ierr);
-  ierr = KSPGetPC(ksp, &pc); CHKERRQ(ierr);
-  ierr = PCSetType(pc, PCJACOBI); CHKERRQ(ierr);
-  ierr = PCJacobiSetType(pc, PC_JACOBI_ROWSUM); CHKERRQ(ierr);
-  ierr = KSPSetType(ksp, KSPCG); CHKERRQ(ierr);
-  ierr = KSPSetNormType(ksp, KSP_NORM_NATURAL); CHKERRQ(ierr);
-  ierr = KSPSetTolerances(ksp, 1e-10, PETSC_DEFAULT, PETSC_DEFAULT,
-                          PETSC_DEFAULT); CHKERRQ(ierr);
   ierr = KSPSetOperators(ksp, mat, mat); CHKERRQ(ierr);
-  ierr = KSPSolve(ksp, rhs, U_g); CHKERRQ(ierr);
   ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
+  ierr = KSPSetUp(ksp); CHKERRQ(ierr);
+  ierr = KSPSolve(ksp, rhs, U_g); CHKERRQ(ierr);
+  printf("----- Global Solution -----\n");
+  VecView(U_g, PETSC_VIEWER_STDOUT_WORLD);
+  printf("---------------------------\n");
+  // ---------------------------------------------------------------------------
+  // Compute pointwise L2 error
+  // ---------------------------------------------------------------------------
+  CeedScalar l2_error;
+  ierr = ComputeError(user, U_g, target, &l2_error); CHKERRQ(ierr);
+  //printf("l2_error: %f\n",l2_error);
+  // ---------------------------------------------------------------------------
+  // Compute L2 error of projected solution into H(div) space
+  // ---------------------------------------------------------------------------
+  const CeedScalar *true_array;
+  Vec error_vec, true_vec;
+
+  // -- Work vectors
+  ierr = VecDuplicate(U_g, &error_vec); CHKERRQ(ierr);
+  ierr = VecSet(error_vec, 0.0); CHKERRQ(ierr);
+  ierr = VecDuplicate(U_g, &true_vec); CHKERRQ(ierr);
+  ierr = VecSet(true_vec, 0.0); CHKERRQ(ierr);
+
+  // -- Assemble global true solution vector
+  CeedVectorGetArrayRead(true_ceed, CEED_MEM_HOST, &true_array);
+  ierr = VecPlaceArray(user->Y_loc, (PetscScalar *)true_array);
+  CHKERRQ(ierr);
+  ierr = DMLocalToGlobal(user->dm, user->Y_loc, INSERT_VALUES, true_vec);
+  CHKERRQ(ierr);
+  ierr = VecResetArray(user->Y_loc); CHKERRQ(ierr);
+  CeedVectorRestoreArrayRead(true_ceed, &true_array);
+
+  // -- Compute L2 error of projected solution
+  CeedScalar l2_error_p;
+  ierr = VecWAXPY(error_vec, -1.0, U_g, true_vec); CHKERRQ(ierr);
+  ierr = VecNorm(error_vec, NORM_2, &l2_error_p); CHKERRQ(ierr);
+  //printf("l2_error_proj: %f\n",l2_error_p);
 
   // Output results
   KSPType ksp_type;
@@ -169,9 +222,10 @@ int main(int argc, char **argv) {
                      "    KSP Type                           : %s\n"
                      "    KSP Convergence                    : %s\n"
                      "    Total KSP Iterations               : %D\n"
-                     "    Final rnorm                        : %e\n",
+                     "    Final rnorm                        : %e\n"
+                     "    L2 Error norm                      : %e\n",
                      ksp_type, KSPConvergedReasons[reason], its,
-                     (double)rnorm); CHKERRQ(ierr);
+                     (double)rnorm, (double)l2_error); CHKERRQ(ierr);
 
   // ---------------------------------------------------------------------------
   // Free objects
@@ -181,9 +235,9 @@ int main(int argc, char **argv) {
   ierr = DMDestroy(&dm); CHKERRQ(ierr);
   ierr = VecDestroy(&U_g); CHKERRQ(ierr);
   ierr = VecDestroy(&U_loc); CHKERRQ(ierr);
-  ierr = VecDestroy(&user->Y_loc); CHKERRQ(ierr);
   ierr = VecDestroy(&rhs); CHKERRQ(ierr);
   ierr = VecDestroy(&rhs_loc); CHKERRQ(ierr);
+  ierr = VecDestroy(&user->Y_loc); CHKERRQ(ierr);
   ierr = MatDestroy(&mat); CHKERRQ(ierr);
   ierr = KSPDestroy(&ksp); CHKERRQ(ierr);
 
@@ -198,6 +252,7 @@ int main(int argc, char **argv) {
   ierr = PetscFree(phys_ctx); CHKERRQ(ierr);
   // Free libCEED objects
 
+  CeedVectorDestroy(&true_ceed);
   CeedVectorDestroy(&rhs_ceed);
   CeedVectorDestroy(&target);
   ierr = CeedDataDestroy(ceed_data); CHKERRQ(ierr);

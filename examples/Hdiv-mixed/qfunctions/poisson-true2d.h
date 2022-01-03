@@ -75,6 +75,8 @@ CEED_QFUNCTION(SetupTrueSoln2D)(void *ctx, const CeedInt Q,
   d5 = ue3[0]*nt3[0]+ue3[1]*nt3[1];
   d6 = ue0[0]*nl0[0]+ue0[1]*nl0[1];
   d7 = ue2[0]*nl2[0]+ue2[1]*nl2[1];
+  //printf("True solution projected into H(div) space;Qfunction poisson-true2d.h\n");
+  //printf("True_Hdiv:%f, %f, %f, %f, %f, %f, %f, %f\n",d0,d1,d2,d3,d4,d5,d6,d7);
   // True solution projected in H(div) space
   true_soln_Hdiv[0] = d0;
   true_soln_Hdiv[1] = d1;
@@ -89,4 +91,4 @@ CEED_QFUNCTION(SetupTrueSoln2D)(void *ctx, const CeedInt Q,
 }
 // -----------------------------------------------------------------------------
 
-#endif // End TRUE_H
+#endif // End ERROR_H

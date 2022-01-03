@@ -432,6 +432,7 @@ int CeedElemRestrictionCreate(Ceed ceed, CeedInt num_elem, CeedInt elem_size,
                         [0, @a l_size - 1].
   @param orient       Array of shape [@a num_elem, @a elem_size] with bool false
                         for positively oriented and true to flip the orientation.
+  @param scale        An scalar value that scales the dofs in assembly.
   @param[out] rstr    Address of the variable where the newly created
                         CeedElemRestriction will be stored
 

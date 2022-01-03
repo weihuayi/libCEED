@@ -68,7 +68,7 @@ CEED_QFUNCTION(SetupMass)(void *ctx, CeedInt Q, const CeedScalar *const *in,
           JTJ[j][k] += J[m][j] * J[m][k];
       }
     }
-    // 2) Compute J^T*J*u * w /detJ
+    // 2) Compute Piola map J^T*J*u * w /detJ
     for (CeedInt k = 0; k < 2; k++) {
       v[k][i] = 0;
       for (CeedInt m = 0; m < 2; m++)

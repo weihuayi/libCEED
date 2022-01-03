@@ -8,7 +8,7 @@
 
 PetscErrorCode ApplyLocal_Ceed(User user, Vec X, Vec Y);
 PetscErrorCode MatMult_Ceed(Mat A, Vec X, Vec Y);
-PetscErrorCode ComputeError(User user, Vec X, CeedVector target,
-                            CeedScalar *l2_error);
+PetscErrorCode ComputeErrorMax(User user, Vec X, CeedVector target,
+                               CeedScalar *max_error);
 
 #endif // matops_h

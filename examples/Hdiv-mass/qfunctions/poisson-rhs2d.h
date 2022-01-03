@@ -23,13 +23,15 @@
 #include <math.h>
 
 // -----------------------------------------------------------------------------
-// This QFunction sets up the rhs for the problem
+// This QFunction sets up the rhs and true solution for the problem
 // Inputs:
 //   x     - interpolation of the physical coordinate
 //   w     - weight of quadrature
 //   J     - dx/dX. x physical coordinate, X reference coordinate [-1,1]^dim
 //
 // Output:
+//   true_soln - True solution that we use it in poisson-error2d.h
+//               to compute pointwise max error
 //   rhs       - Output vector (test functions) at quadrature points
 // Note we need to apply Piola map on the basis, which is J*u/detJ
 // So (v,ue) = \int (v^T * ue detJ*w) ==> \int (v^T J^T* ue * w)
@@ -55,7 +57,7 @@ CEED_QFUNCTION(SetupRhs)(void *ctx, const CeedInt Q,
                                 {dxdX[0][1][i], dxdX[1][1][i]}};
     // *INDENT-ON*
     // Compute J^T*ue
-    CeedScalar ue[2] = {x-y, x+y};
+    CeedScalar ue[2] = {exp(2*x) *sin(y), exp(y) *cos(x)};
     CeedScalar rhs1[2];
     for (CeedInt k = 0; k < 2; k++) {
       rhs1[k] = 0;

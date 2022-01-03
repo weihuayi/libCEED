@@ -6,8 +6,9 @@
 
 #include "structs.h"
 
-PetscErrorCode MatGetDiag(Mat A, Vec D);
-PetscErrorCode ApplyLocal_Ceed(Vec X, Vec Y, User user);
+PetscErrorCode ApplyLocal_Ceed(User user, Vec X, Vec Y);
 PetscErrorCode MatMult_Ceed(Mat A, Vec X, Vec Y);
+PetscErrorCode ComputeError(User user, Vec X, CeedVector target,
+                            CeedScalar *l2_error);
 
 #endif // matops_h
