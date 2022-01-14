@@ -37,7 +37,6 @@ PetscErrorCode Hdiv_POISSON_MASS2D(ProblemData *problem_data, void *ctx) {
   //               SET UP POISSON_QUAD2D
   // ------------------------------------------------------
   problem_data->elem_node               = 4;
-  problem_data->geo_data_size           = 1;
   problem_data->quadrature_mode         = CEED_GAUSS;
   problem_data->setup_rhs               = SetupRhs;
   problem_data->setup_rhs_loc           = SetupRhs_loc;

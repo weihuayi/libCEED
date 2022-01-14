@@ -32,7 +32,7 @@ CEED_QFUNCTION(SetupError2D)(void *ctx, const CeedInt Q,
   // Inputs
   const CeedScalar (*dxdX)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[0],
                    (*u)[CEED_Q_VLA] = (const CeedScalar(*)[CEED_Q_VLA])in[1],
-                   (*target) = in[2];
+                   (*target) = in[2], (*w) = in[3];
   // Outputs
   CeedScalar (*error) = out[0];
   // Quadrature Point Loop
@@ -50,8 +50,8 @@ CEED_QFUNCTION(SetupError2D)(void *ctx, const CeedInt Q,
         uh[k] += J[k][m] * u[m][i]/detJ;
     }
     // Error
-    error[i+0*Q] = fabs(uh[0] - target[i+0*Q]);
-    error[i+1*Q] = fabs(uh[1] - target[i+1*Q]);
+    error[i+0*Q] = (uh[0] - target[i+0*Q])*(uh[0] - target[i+0*Q])*w[i]*detJ;
+    error[i+1*Q] = (uh[1] - target[i+1*Q])*(uh[1] - target[i+1*Q])*w[i]*detJ;
 
   } // End of Quadrature Point Loop
 

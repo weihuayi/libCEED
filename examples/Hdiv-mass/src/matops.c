@@ -60,8 +60,8 @@ PetscErrorCode MatMult_Ceed(Mat A, Vec X, Vec Y) {
 // -----------------------------------------------------------------------------
 // This function calculates the error in the final solution
 // -----------------------------------------------------------------------------
-PetscErrorCode ComputeErrorMax(User user, Vec X, CeedVector target,
-                               CeedScalar *max_error) {
+PetscErrorCode ComputeError(User user, Vec X, CeedVector target,
+                            CeedScalar *l2_error) {
   PetscErrorCode ierr;
   PetscScalar *x;
   PetscMemType mem_type;
@@ -87,19 +87,9 @@ PetscErrorCode ComputeErrorMax(User user, Vec X, CeedVector target,
   ierr = VecRestoreArrayReadAndMemType(user->X_loc, (const PetscScalar **)&x);
   CHKERRQ(ierr);
 
-  // Reduce max error
-  *max_error = 0;
-  const CeedScalar *e;
-  CeedVectorGetArrayRead(collocated_error, CEED_MEM_HOST, &e);
-  for (CeedInt i=0; i<length; i++) {
-    *max_error = PetscMax(*max_error, PetscAbsScalar(e[i]));
-  }
-  CeedVectorRestoreArrayRead(collocated_error, &e);
-  ierr = MPI_Allreduce(MPI_IN_PLACE, max_error, 1, MPIU_REAL, MPIU_MAX,
-                       user->comm);
-  CHKERRQ(ierr);
-
-  //CeedVectorNorm(collocated_error, CEED_NORM_2, l2_error);
+  CeedScalar error;
+  CeedVectorNorm(collocated_error, CEED_NORM_1, &error);
+  *l2_error = sqrt(error);
   // Cleanup
   CeedVectorDestroy(&collocated_error);
 

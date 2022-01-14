@@ -116,6 +116,9 @@ struct Ceed_private {
                          const CeedScalar *,
                          const CeedScalar *, const CeedScalar *,
                          const CeedScalar *, CeedBasis);
+  int (*BasisCreateL2)(CeedElemTopology, CeedInt, CeedInt, CeedInt,
+                       const CeedScalar *, const CeedScalar *,
+                       const CeedScalar *, CeedBasis);
   int (*TensorContractCreate)(CeedBasis, CeedTensorContract);
   int (*QFunctionCreate)(CeedQFunction);
   int (*QFunctionContextCreate)(CeedQFunctionContext);

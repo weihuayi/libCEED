@@ -15,14 +15,14 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 /// @file
-/// Utility functions for setting up POISSON_QUAD2D
+/// Utility functions for setting up MIXED_POISSON problem
 
 #include "../include/setup-libceed.h"
 #include "../include/problems.h"
-#include "../qfunctions/poisson-rhs2d.h"
-#include "../qfunctions/poisson-mass2d.h"
-#include "../qfunctions/poisson-error2d.h"
-#include "../qfunctions/poisson-true2d.h"
+#include "../qfunctions/mixed-poisson-rhs2d.h"
+#include "../qfunctions/mixed-poisson2d.h"
+#include "../qfunctions/mixed-poisson-error2d.h"
+#include "../qfunctions/mixed-poisson-true2d.h"
 
 // Hdiv_POISSON_MASS2D is registered in cl-option.c
 PetscErrorCode Hdiv_POISSON_MASS2D(ProblemData *problem_data, void *ctx) {
@@ -37,12 +37,11 @@ PetscErrorCode Hdiv_POISSON_MASS2D(ProblemData *problem_data, void *ctx) {
   //               SET UP POISSON_QUAD2D
   // ------------------------------------------------------
   problem_data->elem_node               = 4;
-  problem_data->geo_data_size           = 1;
   problem_data->quadrature_mode         = CEED_GAUSS;
-  problem_data->setup_rhs               = SetupRhs;
-  problem_data->setup_rhs_loc           = SetupRhs_loc;
-  problem_data->residual                = SetupMass;
-  problem_data->residual_loc            = SetupMass_loc;
+  problem_data->setup_rhs               = SetupRhs2D;
+  problem_data->setup_rhs_loc           = SetupRhs2D_loc;
+  problem_data->residual                = SetupMixedPoisson2D;
+  problem_data->residual_loc            = SetupMixedPoisson2D_loc;
   problem_data->setup_error             = SetupError2D;
   problem_data->setup_error_loc         = SetupError2D_loc;
   problem_data->setup_true              = SetupTrueSoln2D;

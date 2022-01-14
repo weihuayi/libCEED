@@ -15,8 +15,7 @@ PetscErrorCode CreateRestrictionFromPlex(Ceed ceed, DM dm,
     CeedElemRestriction *elem_restr);
 // Utility function to create local CEED Oriented restriction from DMPlex
 PetscErrorCode CreateRestrictionFromPlexOriented(Ceed ceed, DM dm,
-    CeedInt height, DMLabel domain_label, CeedInt value, CeedInt P,
-    CeedElemRestriction *elem_restr_oriented);
+    CeedInt P, CeedElemRestriction *elem_restr_oriented);
 // Set up libCEED for a given degree
 PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
                             ProblemData *problem_data, PetscInt U_g_size,

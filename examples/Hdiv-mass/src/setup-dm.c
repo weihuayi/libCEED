@@ -7,9 +7,9 @@ PetscErrorCode CreateDistributedDM(MPI_Comm comm, DM *dm) {
   PetscErrorCode  ierr;
   PetscSection   sec;
   PetscBool      interpolate = PETSC_TRUE;
-  PetscInt       nx = 8, ny = 8;
+  PetscInt       nx = 1, ny = 1;
   PetscInt       faces[2] = {nx, ny};
-  PetscInt       dim = 2, dofs_per_edge;
+  PetscInt       dim, dofs_per_edge;
   PetscInt       p_start, p_end;
   PetscInt       c_start, c_end; // cells
   PetscInt       e_start, e_end, e; // edges
@@ -17,6 +17,10 @@ PetscErrorCode CreateDistributedDM(MPI_Comm comm, DM *dm) {
 
   PetscFunctionBeginUser;
 
+  ierr = PetscOptionsGetIntArray(NULL, NULL, "-dm_plex_box_faces",
+                                 faces, &dim, NULL); CHKERRQ(ierr);
+
+  if (!dim) dim = 2;
   ierr = DMPlexCreateBoxMesh(comm, dim, PETSC_FALSE, faces, NULL,
                              NULL, NULL, interpolate, dm); CHKERRQ(ierr);
   // Get plex limits

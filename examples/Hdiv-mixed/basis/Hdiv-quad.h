@@ -24,7 +24,7 @@
 //    0---------1
 //     b0     b1
 // Bx[0-->7] = b0_x-->b7_x, By[0-->7] = b0_y-->b7_y
-int HdivBasisQuad(CeedScalar *X, CeedScalar *Bx, CeedScalar *By) {
+int NodalHdivBasisQuad(CeedScalar *X, CeedScalar *Bx, CeedScalar *By) {
   CeedScalar xhat = X[0];
   CeedScalar yhat = X[1];
   Bx[0] = -0.125 + 0.125*xhat*xhat;
@@ -45,8 +45,8 @@ int HdivBasisQuad(CeedScalar *X, CeedScalar *Bx, CeedScalar *By) {
   By[7] = 0.125 + -0.125*yhat*yhat;
   return 0;
 }
-static void QuadBasis(CeedInt Q, CeedScalar *q_ref, CeedScalar *q_weights,
-                      CeedScalar *interp, CeedScalar *div, CeedQuadMode quad_mode) {
+static void HdivBasisQuad(CeedInt Q, CeedScalar *q_ref, CeedScalar *q_weights,
+                          CeedScalar *interp, CeedScalar *div, CeedQuadMode quad_mode) {
 
   // Get 1D quadrature on [-1,1]
   CeedScalar q_ref_1d[Q], q_weight_1d[Q];
@@ -73,7 +73,7 @@ static void QuadBasis(CeedInt Q, CeedScalar *q_ref, CeedScalar *q_weights,
       q_weights[k1] = q_weight_1d[j]*q_weight_1d[i];
       xhat[0] = q_ref_1d[j];
       xhat[1] = q_ref_1d[i];
-      HdivBasisQuad(xhat, Bx, By);
+      NodalHdivBasisQuad(xhat, Bx, By);
       for (CeedInt k=0; k<8; k++) {
         interp[k1*8+k] = Bx[k];
         interp[k1*8+k+8*Q*Q] = By[k];

@@ -18,9 +18,9 @@ struct AppCtx_ {
 // libCEED data struct
 typedef struct CeedData_ *CeedData;
 struct CeedData_ {
-  CeedBasis            basis_x, basis_u;
-  CeedElemRestriction  elem_restr_x, elem_restr_u, elem_restr_geo_data_i,
-                       elem_restr_u_i;
+  CeedBasis            basis_x, basis_u, basis_p;
+  CeedElemRestriction  elem_restr_x, elem_restr_u, elem_restr_U_i,
+                       elem_restr_p;
   CeedQFunction        qf_residual, qf_error;
   CeedOperator         op_residual, op_error;
   CeedVector           x_ceed, y_ceed;
@@ -55,6 +55,7 @@ struct User_ {
   Vec          X_loc, Y_loc;
   CeedVector   x_ceed, y_ceed;
   CeedOperator op_apply, op_error;
+  CeedElemRestriction elem_restr_u;
   DM           dm;
   Ceed         ceed;
   AppCtx       app_ctx;
@@ -67,7 +68,7 @@ typedef struct {
   const char        *setup_rhs_loc, *residual_loc, *setup_error_loc,
         *setup_true_loc;
   CeedQuadMode      quadrature_mode;
-  CeedInt           geo_data_size, elem_node;
+  CeedInt           elem_node;
   PetscErrorCode    (*setup_ctx)(Ceed, CeedData, Physics);
 
 } ProblemData;

@@ -7,7 +7,7 @@
 
 int main(int argc, char **argv) {
   Ceed ceed;
-  const CeedInt num_nodes = 4, Q = 6, dim = 2, num_qpts = Q*Q;
+  const CeedInt num_nodes = 4, Q = 3, dim = 2, num_qpts = Q*Q;
   CeedInt num_comp = 1;      // one vector componenet
   CeedInt P = dim*num_nodes; // dof per element!
   CeedBasis b;

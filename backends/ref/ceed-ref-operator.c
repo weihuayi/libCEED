@@ -63,6 +63,7 @@ static int CeedOperatorSetupFields_Ref(CeedQFunction qf, CeedOperator op,
       break;
     case CEED_EVAL_INTERP:
     case CEED_EVAL_GRAD:
+    case CEED_EVAL_DIV:
       ierr = CeedOperatorFieldGetBasis(op_fields[i], &basis); CeedChkBackend(ierr);
       ierr = CeedQFunctionFieldGetSize(qf_fields[i], &size); CeedChkBackend(ierr);
       ierr = CeedBasisGetNumNodes(basis, &P); CeedChkBackend(ierr);
@@ -79,8 +80,6 @@ static int CeedOperatorSetupFields_Ref(CeedQFunction qf, CeedOperator op,
       ierr = CeedBasisApply(basis, 1, CEED_NOTRANSPOSE, CEED_EVAL_WEIGHT,
                             CEED_VECTOR_NONE, q_vecs[i]); CeedChkBackend(ierr);
       break;
-    case CEED_EVAL_DIV:
-      break; // Not implemented
     case CEED_EVAL_CURL:
       break; // Not implemented
     }
@@ -275,10 +274,20 @@ static inline int CeedOperatorInputBasis_Ref(CeedInt e, CeedInt Q,
                             CEED_EVAL_GRAD, impl->e_vecs_in[i],
                             impl->q_vecs_in[i]); CeedChkBackend(ierr);
       break;
+    case CEED_EVAL_DIV:
+      ierr = CeedOperatorFieldGetBasis(op_input_fields[i], &basis);
+      CeedChkBackend(ierr);
+      ierr = CeedBasisGetNumComponents(basis, &num_comp);
+      CeedChkBackend(ierr);
+      ierr = CeedVectorSetArray(impl->e_vecs_in[i], CEED_MEM_HOST,
+                                CEED_USE_POINTER, &e_data_full[i][e*elem_size*num_comp]);
+      CeedChkBackend(ierr);
+      ierr = CeedBasisApply(basis, 1, CEED_NOTRANSPOSE, CEED_EVAL_DIV,
+                            impl->e_vecs_in[i], impl->q_vecs_in[i]); CeedChkBackend(ierr);
+      break;
     case CEED_EVAL_WEIGHT:
       break;  // No action
     // LCOV_EXCL_START
-    case CEED_EVAL_DIV:
     case CEED_EVAL_CURL: {
       ierr = CeedOperatorFieldGetBasis(op_input_fields[i], &basis);
       CeedChkBackend(ierr);
@@ -345,6 +354,19 @@ static inline int CeedOperatorOutputBasis_Ref(CeedInt e, CeedInt Q,
                             CEED_EVAL_GRAD, impl->q_vecs_out[i],
                             impl->e_vecs_out[i]); CeedChkBackend(ierr);
       break;
+    case CEED_EVAL_DIV:
+      ierr = CeedOperatorFieldGetBasis(op_output_fields[i], &basis);
+      CeedChkBackend(ierr);
+      ierr = CeedBasisGetNumComponents(basis, &num_comp);
+      CeedChkBackend(ierr);
+      ierr = CeedVectorSetArray(impl->e_vecs_out[i], CEED_MEM_HOST,
+                                CEED_USE_POINTER,
+                                &e_data_full[i + num_input_fields][e*elem_size*num_comp]);
+      CeedChkBackend(ierr);
+      ierr = CeedBasisApply(basis, 1, CEED_TRANSPOSE,
+                            CEED_EVAL_DIV, impl->q_vecs_out[i],
+                            impl->e_vecs_out[i]); CeedChkBackend(ierr);
+      break;
     // LCOV_EXCL_START
     case CEED_EVAL_WEIGHT: {
       Ceed ceed;
@@ -353,7 +375,6 @@ static inline int CeedOperatorOutputBasis_Ref(CeedInt e, CeedInt Q,
                        "CEED_EVAL_WEIGHT cannot be an output "
                        "evaluation mode");
     }
-    case CEED_EVAL_DIV:
     case CEED_EVAL_CURL: {
       Ceed ceed;
       ierr = CeedOperatorGetCeed(op, &ceed); CeedChkBackend(ierr);

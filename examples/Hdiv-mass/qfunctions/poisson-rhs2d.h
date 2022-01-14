@@ -22,6 +22,9 @@
 
 #include <math.h>
 
+#ifndef M_PI
+#define M_PI    3.14159265358979323846
+#endif
 // -----------------------------------------------------------------------------
 // This QFunction sets up the rhs and true solution for the problem
 // Inputs:
@@ -57,7 +60,7 @@ CEED_QFUNCTION(SetupRhs)(void *ctx, const CeedInt Q,
                                 {dxdX[0][1][i], dxdX[1][1][i]}};
     // *INDENT-ON*
     // Compute J^T*ue
-    CeedScalar ue[2] = {exp(2*x) *sin(y), exp(y) *cos(x)};
+    CeedScalar ue[2] = {-M_PI*cos(M_PI*x) *sin(M_PI*y), -M_PI*sin(M_PI*x) *cos(M_PI*y)};
     CeedScalar rhs1[2];
     for (CeedInt k = 0; k < 2; k++) {
       rhs1[k] = 0;

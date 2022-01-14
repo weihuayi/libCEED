@@ -27,7 +27,9 @@
 #define TRUE_H
 
 #include <math.h>
-
+#ifndef M_PI
+#define M_PI    3.14159265358979323846
+#endif
 // -----------------------------------------------------------------------------
 // Compuet true solution
 // -----------------------------------------------------------------------------
@@ -39,7 +41,7 @@ CEED_QFUNCTION(SetupTrueSoln2D)(void *ctx, const CeedInt Q,
   const CeedScalar (*coords) = in[0],
                    (*dxdX)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[1];
   // Outputs
-  CeedScalar (*true_soln_Hdiv) = out[0];
+  CeedScalar (*true_u) = out[0];//, (*true_p) = out[1];
 
   // Setup, J = dx/dX
   const CeedScalar J0[2][2] = {{dxdX[0][0][0], dxdX[1][0][0]},
@@ -54,10 +56,14 @@ CEED_QFUNCTION(SetupTrueSoln2D)(void *ctx, const CeedInt Q,
   CeedScalar x1 = coords[1+0*Q], y1 = coords[1+1*Q];
   CeedScalar x2 = coords[2+0*Q], y2 = coords[2+1*Q];
   CeedScalar x3 = coords[3+0*Q], y3 = coords[3+1*Q];
-  CeedScalar ue0[2] = {x0-y0, x0+y0};
-  CeedScalar ue1[2] = {x1-y1, x1+y1};
-  CeedScalar ue2[2] = {x2-y2, x2+y2};
-  CeedScalar ue3[2] = {x3-y3, x3+y3};
+  CeedScalar ue0[2] = {-M_PI*cos(M_PI*x0)*sin(M_PI*y0),
+                       -M_PI*sin(M_PI*x0)*cos(M_PI*y0)};
+  CeedScalar ue1[2] = {-M_PI*cos(M_PI*x1)*sin(M_PI*y1),
+                       -M_PI*sin(M_PI*x1)*cos(M_PI*y1)};
+  CeedScalar ue2[2] = {-M_PI*cos(M_PI*x2)*sin(M_PI*y2),
+                       -M_PI*sin(M_PI*x2)*cos(M_PI*y2)};
+  CeedScalar ue3[2] = {-M_PI*cos(M_PI*x3)*sin(M_PI*y3),
+                       -M_PI*sin(M_PI*x3)*cos(M_PI*y3)};
   CeedScalar nl0[2] = {-J0[1][1],J0[0][1]};
   CeedScalar nb0[2] = {J0[1][0],-J0[0][0]};
   CeedScalar nr1[2] = {J1[1][1],-J1[0][1]};
@@ -75,20 +81,21 @@ CEED_QFUNCTION(SetupTrueSoln2D)(void *ctx, const CeedInt Q,
   d5 = ue3[0]*nt3[0]+ue3[1]*nt3[1];
   d6 = ue0[0]*nl0[0]+ue0[1]*nl0[1];
   d7 = ue2[0]*nl2[0]+ue2[1]*nl2[1];
-  //printf("True solution projected into H(div) space;Qfunction poisson-true2d.h\n");
-  //printf("True_Hdiv:%f, %f, %f, %f, %f, %f, %f, %f\n",d0,d1,d2,d3,d4,d5,d6,d7);
   // True solution projected in H(div) space
-  true_soln_Hdiv[0] = d0;
-  true_soln_Hdiv[1] = d1;
-  true_soln_Hdiv[2] = d2;
-  true_soln_Hdiv[3] = d3;
-  true_soln_Hdiv[4] = d4;
-  true_soln_Hdiv[5] = d5;
-  true_soln_Hdiv[6] = d6;
-  true_soln_Hdiv[7] = d7;
+  true_u[0] = d0;
+  true_u[1] = d1;
+  true_u[2] = d2;
+  true_u[3] = d3;
+  true_u[4] = d4;
+  true_u[5] = d5;
+  true_u[6] = d6;
+  true_u[7] = d7;
+  //CeedScalar x = 0.5*(x1+x2), y = 0.5*(y1+y3);
+  //CeedScalar pe = x*(1-x)*y*(1-y);
+  //true_p[0] = pe;
 
   return 0;
 }
 // -----------------------------------------------------------------------------
 
-#endif // End ERROR_H
+#endif // End TRUE_H
