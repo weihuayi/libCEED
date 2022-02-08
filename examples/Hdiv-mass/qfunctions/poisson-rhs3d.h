@@ -15,10 +15,10 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 /// @file
-/// Mixed poisson 2D quad element using PETSc
+/// Mixed poisson 3D Hex element using PETSc
 
-#ifndef POISSON_RHS2D_H
-#define POISSON_RHS2D_H
+#ifndef POISSON_RHS3D_H
+#define POISSON_RHS3D_H
 
 #include <math.h>
 
@@ -39,14 +39,14 @@
 // Note we need to apply Piola map on the basis, which is J*u/detJ
 // So (v,ue) = \int (v^T * ue detJ*w) ==> \int (v^T J^T* ue * w)
 // -----------------------------------------------------------------------------
-CEED_QFUNCTION(SetupRhs2D)(void *ctx, const CeedInt Q,
+CEED_QFUNCTION(SetupRhs3D)(void *ctx, const CeedInt Q,
                            const CeedScalar *const *in,
                            CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
   const CeedScalar (*coords) = in[0],
                    (*w) = in[1],
-                   (*dxdX)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[2];
+                   (*dxdX)[3][CEED_Q_VLA] = (const CeedScalar(*)[3][CEED_Q_VLA])in[2];
   // Outputs
   //CeedScalar (*rhs)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])out[0];
   CeedScalar (*true_soln) = out[0], (*rhs) = out[1];
@@ -54,18 +54,21 @@ CEED_QFUNCTION(SetupRhs2D)(void *ctx, const CeedInt Q,
   // Quadrature Point Loop
   CeedPragmaSIMD
   for (CeedInt i=0; i<Q; i++) {
-    // Setup, (x,y) and J = dx/dX
-    CeedScalar x = coords[i+0*Q], y = coords[i+1*Q];
-    const CeedScalar J[2][2] = {{dxdX[0][0][i], dxdX[1][0][i]},
-                                {dxdX[0][1][i], dxdX[1][1][i]}};
+    // Setup, (x,y,z) and J = dx/dX
+    CeedScalar x = coords[i+0*Q], y = coords[i+1*Q], z = coords[i+2*Q];
+    const CeedScalar J[3][3] = {{dxdX[0][0][i], dxdX[1][0][i], dxdX[2][0][i]},
+                                {dxdX[0][1][i], dxdX[1][1][i], dxdX[2][1][i]},
+                                {dxdX[0][2][i], dxdX[1][2][i], dxdX[2][2][i]}};
     // *INDENT-ON*
-    // Compute J^T*ue
-    CeedScalar ue[2] = {-M_PI*cos(M_PI*x) *sin(M_PI*y), -M_PI*sin(M_PI*x) *cos(M_PI*y)};
-    //CeedScalar ue[2] = {x-y, x+y};
-    CeedScalar rhs1[2];
-    for (CeedInt k = 0; k < 2; k++) {
+    CeedScalar ue[3] = {-M_PI*cos(M_PI*x) *sin(M_PI*y) *sin(M_PI*z),
+                        -M_PI*sin(M_PI*x) *cos(M_PI*y) *sin(M_PI*z),
+                        -M_PI*sin(M_PI*x) *sin(M_PI*y) *sin(M_PI*z)
+                       };
+    //CeedScalar ue[3] = {x,y,z};
+    CeedScalar rhs1[3];
+    for (CeedInt k = 0; k < 3; k++) {
       rhs1[k] = 0;
-      for (CeedInt m = 0; m < 2; m++)
+      for (CeedInt m = 0; m < 3; m++)
         rhs1[k] += J[m][k] * ue[m];
     }
     // Component 1
@@ -74,9 +77,12 @@ CEED_QFUNCTION(SetupRhs2D)(void *ctx, const CeedInt Q,
     // Component 2
     true_soln[i+1*Q] = ue[1];
     rhs[i+1*Q] = rhs1[1] * w[i];
+    // Component 3
+    true_soln[i+2*Q] = ue[2];
+    rhs[i+2*Q] = rhs1[2] * w[i];
   } // End of Quadrature Point Loop
   return 0;
 }
 // -----------------------------------------------------------------------------
 
-#endif //End of POISSON_RHS2D_H
+#endif //End of POISSON_RHS3D_H

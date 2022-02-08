@@ -15,10 +15,10 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 /// @file
-/// Mixed poisson 2D quad element using PETSc
+/// RHS of Darcy problem 2D (quad element) using PETSc
 
-#ifndef POISSON_RHS2D_H
-#define POISSON_RHS2D_H
+#ifndef DARCY_RHS2D_H
+#define DARCY_RHS2D_H
 
 #include <math.h>
 
@@ -26,30 +26,33 @@
 #define M_PI    3.14159265358979323846
 #endif
 // -----------------------------------------------------------------------------
-// This QFunction sets up the rhs and true solution for the problem
+// Strong form:
+//  u       = -\grad(p)
+//  \div(u) = f
+// Weak form: Find (u,p) \in VxQ (V=H(div), Q=L^2) on \Omega
+//  (u, v) - (p, \div(v)) = -<p, v\cdot n>
+// -(q, \div(u))          = -(q, f)
+// This QFunction sets up the rhs and true solution for the above problem
 // Inputs:
-//   x     - interpolation of the physical coordinate
-//   w     - weight of quadrature
-//   J     - dx/dX. x physical coordinate, X reference coordinate [-1,1]^dim
+//   x     : interpolation of the physical coordinate
+//   w     : weight of quadrature
+//   J     : dx/dX. x physical coordinate, X reference coordinate [-1,1]^dim
 //
 // Output:
-//   true_soln - True solution that we use it in poisson-error2d.h
-//               to compute pointwise max error
-//   rhs       - Output vector (test functions) at quadrature points
-// Note we need to apply Piola map on the basis, which is J*u/detJ
-// So (v,ue) = \int (v^T * ue detJ*w) ==> \int (v^T J^T* ue * w)
+//   rhs_u     : which is 0.0 for this problem
+//   rhs_p     : -(q, f) = -\int( q * f * w*detJ)dx
 // -----------------------------------------------------------------------------
-CEED_QFUNCTION(SetupRhs2D)(void *ctx, const CeedInt Q,
-                           const CeedScalar *const *in,
-                           CeedScalar *const *out) {
+CEED_QFUNCTION(SetupDarcyRhs2D)(void *ctx, const CeedInt Q,
+                                const CeedScalar *const *in,
+                                CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
   const CeedScalar (*coords) = in[0],
                    (*w) = in[1],
                    (*dxdX)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[2];
   // Outputs
-  //CeedScalar (*rhs)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])out[0];
-  CeedScalar (*true_soln) = out[0], (*rhs) = out[1];
+  CeedScalar (*rhs_u) = out[0], (*rhs_p) = out[1],
+             (*true_soln) = out[2];
 
   // Quadrature Point Loop
   CeedPragmaSIMD
@@ -58,25 +61,25 @@ CEED_QFUNCTION(SetupRhs2D)(void *ctx, const CeedInt Q,
     CeedScalar x = coords[i+0*Q], y = coords[i+1*Q];
     const CeedScalar J[2][2] = {{dxdX[0][0][i], dxdX[1][0][i]},
                                 {dxdX[0][1][i], dxdX[1][1][i]}};
+    const CeedScalar detJ = J[1][1]*J[0][0] - J[1][0]*J[0][1];
     // *INDENT-ON*
-    // Compute J^T*ue
+    CeedScalar pe = sin(M_PI*x) * sin(M_PI*y);
     CeedScalar ue[2] = {-M_PI*cos(M_PI*x) *sin(M_PI*y), -M_PI*sin(M_PI*x) *cos(M_PI*y)};
-    //CeedScalar ue[2] = {x-y, x+y};
-    CeedScalar rhs1[2];
-    for (CeedInt k = 0; k < 2; k++) {
-      rhs1[k] = 0;
-      for (CeedInt m = 0; m < 2; m++)
-        rhs1[k] += J[m][k] * ue[m];
-    }
-    // Component 1
-    true_soln[i+0*Q] = ue[0];
-    rhs[i+0*Q] = rhs1[0] * w[i];
-    // Component 2
-    true_soln[i+1*Q] = ue[1];
-    rhs[i+1*Q] = rhs1[1] * w[i];
+    CeedScalar f = 2*M_PI*M_PI*sin(M_PI*x)*sin(M_PI*y);
+
+    // 1st eq: component 1
+    rhs_u[i+0*Q] = 0.;
+    // 1st eq: component 2
+    rhs_u[i+1*Q] = 0.;
+    // 2nd eq
+    rhs_p[i] = -f*w[i]*detJ;
+    // True solution Ue=[p,u]
+    true_soln[i+0*Q] = pe;
+    true_soln[i+1*Q] = ue[0];
+    true_soln[i+2*Q] = ue[1];
   } // End of Quadrature Point Loop
   return 0;
 }
 // -----------------------------------------------------------------------------
 
-#endif //End of POISSON_RHS2D_H
+#endif //End of DARCY_RHS2D_H

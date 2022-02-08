@@ -15,44 +15,45 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 /// @file
-/// Utility functions for setting up MIXED_POISSON problem
+/// Utility functions for setting up Darcy problem in 3D
 
 #include "../include/setup-libceed.h"
 #include "../include/problems.h"
-#include "../qfunctions/mixed-poisson-rhs2d.h"
-#include "../qfunctions/mixed-poisson2d.h"
-#include "../qfunctions/mixed-poisson-error2d.h"
-#include "../qfunctions/mixed-poisson-true2d.h"
+#include "../qfunctions/darcy-rhs3d.h"
+#include "../qfunctions/darcy-mass3d.h"
+#include "../qfunctions/darcy-error3d.h"
+#include "../qfunctions/face-geo3d.h"
 
-// Hdiv_POISSON_MASS2D is registered in cl-option.c
-PetscErrorCode Hdiv_POISSON_MASS2D(ProblemData *problem_data, void *ctx) {
+// Hdiv_DARCY3D is registered in cl-option.c
+PetscErrorCode Hdiv_DARCY3D(ProblemData *problem_data, void *ctx) {
   User              user = *(User *)ctx;
   MPI_Comm          comm = PETSC_COMM_WORLD;
   PetscInt          ierr;
   PetscFunctionBeginUser;
 
-  ierr = PetscCalloc1(1, &user->phys->pq2d_ctx); CHKERRQ(ierr);
+  ierr = PetscCalloc1(1, &user->phys->darcy3d_ctx); CHKERRQ(ierr);
 
   // ------------------------------------------------------
   //               SET UP POISSON_QUAD2D
   // ------------------------------------------------------
-  problem_data->elem_node               = 4;
+  problem_data->dim                     = 3;
+  problem_data->elem_node               = 8;
+  problem_data->q_data_size_face        = 4;
   problem_data->quadrature_mode         = CEED_GAUSS;
-  problem_data->setup_rhs               = SetupRhs2D;
-  problem_data->setup_rhs_loc           = SetupRhs2D_loc;
-  problem_data->residual                = SetupMixedPoisson2D;
-  problem_data->residual_loc            = SetupMixedPoisson2D_loc;
-  problem_data->setup_error             = SetupError2D;
-  problem_data->setup_error_loc         = SetupError2D_loc;
-  problem_data->setup_true              = SetupTrueSoln2D;
-  problem_data->setup_true_loc          = SetupTrueSoln2D_loc;
+  problem_data->setup_rhs               = SetupDarcyRhs3D;
+  problem_data->setup_rhs_loc           = SetupDarcyRhs3D_loc;
+  problem_data->residual                = SetupDarcyMass3D;
+  problem_data->residual_loc            = SetupDarcyMass3D_loc;
+  problem_data->setup_error             = SetupDarcyError3D;
+  problem_data->setup_error_loc         = SetupDarcyError3D_loc;
+  problem_data->setup_face_geo          = SetupFaceGeo3D;
+  problem_data->setup_face_geo_loc      = SetupFaceGeo3D_loc;
   // ------------------------------------------------------
   //              Command line Options
   // ------------------------------------------------------
-  ierr = PetscOptionsBegin(comm, NULL, "Options for DENSITY_CURRENT problem",
-                           NULL); CHKERRQ(ierr);
+  PetscOptionsBegin(comm, NULL, "Options for Hdiv-mixed problem", NULL);
 
-  ierr = PetscOptionsEnd(); CHKERRQ(ierr);
+  PetscOptionsEnd();
 
   PetscFunctionReturn(0);
 }

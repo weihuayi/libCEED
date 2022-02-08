@@ -16,14 +16,33 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
+# After make the problem, you can run convergence test by: ./conv_test.sh -d 2 (or -d 3)
+# Reading arguments with getopts options
+while getopts d: flag
+do
+    case "${flag}" in
+        d) dim=${OPTARG};;
+    esac
+done
+echo "Running convergence test in ${dim}D for Darcy problem";
+
 declare -A run_flags
     run_flags[pc_type]=svd
-    run_flags[dm_plex_box_faces]=2,2
+    if [[ $dim -eq 2 ]];
+    then
+        run_flags[problem]=darcy2d
+        run_flags[dm_plex_dim]=$dim
+        run_flags[dm_plex_box_faces]=2,2
+    else
+        run_flags[problem]=darcy3d
+        run_flags[dm_plex_dim]=$dim
+        run_flags[dm_plex_box_faces]=2,2,2
+    fi
 
 declare -A test_flags
     test_flags[res_start]=2
-    test_flags[res_stride]=2
-    test_flags[res_end]=12
+    test_flags[res_stride]=1
+    test_flags[res_end]=6
 
 file_name=conv_test_result.csv
 
@@ -32,7 +51,11 @@ echo "run,mesh_res,error_u,error_p" > $file_name
 i=0
 
 for ((res=${test_flags[res_start]}; res<=${test_flags[res_end]}; res+=${test_flags[res_stride]})); do
-    run_flags[dm_plex_box_faces]=$res,$res
+    if [[ $dim -eq 2 ]]; then
+        run_flags[dm_plex_box_faces]=$res,$res
+    else
+        run_flags[dm_plex_box_faces]=$res,$res,$res
+    fi
     args=''
     for arg in "${!run_flags[@]}"; do
         if ! [[ -z ${run_flags[$arg]} ]]; then

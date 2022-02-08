@@ -1,6 +1,7 @@
 #include "../include/setup-libceed.h"
 #include "../include/petsc-macros.h"
 #include "../basis/Hdiv-quad.h"
+#include "../basis/Hdiv-hex.h"
 #include "../basis/L2-P0.h"
 
 // -----------------------------------------------------------------------------
@@ -46,134 +47,26 @@ PetscErrorCode CeedDataDestroy(CeedData ceed_data) {
 PetscInt Involute(PetscInt i) {
   return i >= 0 ? i : -(i + 1);
 };
+
 // -----------------------------------------------------------------------------
 // Get CEED restriction data from DMPlex
 // -----------------------------------------------------------------------------
-PetscErrorCode CreateRestrictionFromPlex(Ceed ceed, DM dm,
-    CeedInt height, DMLabel domain_label, CeedInt value, CeedInt P,
-    CeedElemRestriction *elem_restr) {
-  PetscSection section;
-  PetscInt p, num_elem, num_dof, *restr_indices, elem_offset, num_fields,
-           dim, depth;
-  Vec U_loc;
-  DMLabel depth_label;
-  IS depth_is, iter_is;
-  const PetscInt *iter_indices;
+PetscErrorCode CreateRestrictionFromPlex(Ceed ceed, DM dm, CeedInt height,
+    DMLabel domain_label, CeedInt value, CeedElemRestriction *elem_restr) {
+  PetscInt num_elem, elem_size, num_dof, num_comp, *elem_restr_offsets;
   PetscErrorCode ierr;
 
   PetscFunctionBeginUser;
 
-  ierr = DMGetDimension(dm, &dim); CHKERRQ(ierr);
-  dim -= height;
-  ierr = DMGetLocalSection(dm, &section); CHKERRQ(ierr);
-  ierr = PetscSectionGetNumFields(section, &num_fields); CHKERRQ(ierr);
-  PetscInt num_comp[num_fields], field_offsets[num_fields+1];
-  field_offsets[0] = 0;
-  for (PetscInt f = 0; f < num_fields; f++) {
-    ierr = PetscSectionGetFieldComponents(section, f, &num_comp[f]); CHKERRQ(ierr);
-    field_offsets[f+1] = field_offsets[f] + num_comp[f];
-  }
-
-  ierr = DMPlexGetDepth(dm, &depth); CHKERRQ(ierr);
-  ierr = DMPlexGetDepthLabel(dm, &depth_label); CHKERRQ(ierr);
-  ierr = DMLabelGetStratumIS(depth_label, depth - height, &depth_is);
+  ierr = DMPlexGetLocalOffsets(dm, domain_label, value, height, 0, &num_elem,
+                               &elem_size, &num_comp, &num_dof, &elem_restr_offsets);
   CHKERRQ(ierr);
-  if (domain_label) {
-    IS domain_is;
-    ierr = DMLabelGetStratumIS(domain_label, value, &domain_is); CHKERRQ(ierr);
-    if (domain_is) { // domainIS is non-empty
-      ierr = ISIntersect(depth_is, domain_is, &iter_is); CHKERRQ(ierr);
-      ierr = ISDestroy(&domain_is); CHKERRQ(ierr);
-    } else { // domainIS is NULL (empty)
-      iter_is = NULL;
-    }
-    ierr = ISDestroy(&depth_is); CHKERRQ(ierr);
-  } else {
-    iter_is = depth_is;
-  }
-  if (iter_is) {
-    ierr = ISGetLocalSize(iter_is, &num_elem); CHKERRQ(ierr);
-    ierr = ISGetIndices(iter_is, &iter_indices); CHKERRQ(ierr);
-  } else {
-    num_elem = 0;
-    iter_indices = NULL;
-  }
-  ierr = PetscMalloc1(num_elem*PetscPowInt(P, dim), &restr_indices);
-  CHKERRQ(ierr);
-  for (p = 0, elem_offset = 0; p < num_elem; p++) {
-    PetscInt c = iter_indices[p];
-    PetscInt num_indices, *indices, num_nodes;
-    ierr = DMPlexGetClosureIndices(dm, section, section, c, PETSC_TRUE,
-                                   &num_indices, &indices, NULL, NULL);
-    CHKERRQ(ierr);
-    bool flip = false;
-    if (height > 0) {
-      PetscInt num_cells, num_faces, start = -1;
-      const PetscInt *orients, *faces, *cells;
-      ierr = DMPlexGetSupport(dm, c, &cells); CHKERRQ(ierr);
-      ierr = DMPlexGetSupportSize(dm, c, &num_cells); CHKERRQ(ierr);
-      if (num_cells != 1) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_ARG_INCOMP,
-                                     "Expected one cell in support of exterior face, but got %D cells",
-                                     num_cells);
-      ierr = DMPlexGetCone(dm, cells[0], &faces); CHKERRQ(ierr);
-      ierr = DMPlexGetConeSize(dm, cells[0], &num_faces); CHKERRQ(ierr);
-      for (PetscInt i=0; i<num_faces; i++) {if (faces[i] == c) start = i;}
-      if (start < 0) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_ARG_CORRUPT,
-                                "Could not find face %D in cone of its support",
-                                c);
-      ierr = DMPlexGetConeOrientation(dm, cells[0], &orients); CHKERRQ(ierr);
-      if (orients[start] < 0) flip = true;
-    }
-    if (num_indices % field_offsets[num_fields]) SETERRQ1(PETSC_COMM_SELF,
-          PETSC_ERR_ARG_INCOMP, "Number of closure indices not compatible with Cell %D",
-          c);
-    num_nodes = num_indices / field_offsets[num_fields];
-    for (PetscInt i = 0; i < num_nodes; i++) {
-      PetscInt ii = i;
-      if (flip) {
-        if (P == num_nodes) ii = num_nodes - 1 - i;
-        else if (P*P == num_nodes) {
-          PetscInt row = i / P, col = i % P;
-          ii = row + col * P;
-        } else SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_SUP,
-                          "No support for flipping point with %D nodes != P (%D) or P^2",
-                          num_nodes, P);
-      }
-      // Check that indices are blocked by node and thus can be coalesced as a single field with
-      // field_offsets[num_fields] = sum(num_comp) components.
-      for (PetscInt f = 0; f < num_fields; f++) {
-        for (PetscInt j = 0; j < num_comp[f]; j++) {
-          if (Involute(indices[field_offsets[f]*num_nodes + ii*num_comp[f] + j])
-              != Involute(indices[ii*num_comp[0]]) + field_offsets[f] + j)
-            SETERRQ4(PETSC_COMM_SELF, PETSC_ERR_ARG_INCOMP,
-                     "Cell %D closure indices not interlaced for node %D field %D component %D",
-                     c, ii, f, j);
-        }
-      }
-      // Essential boundary conditions are encoded as -(loc+1), but we don't care so we decode.
-      PetscInt loc = Involute(indices[ii*num_comp[0]]);
-      restr_indices[elem_offset++] = loc;
-    }
-    ierr = DMPlexRestoreClosureIndices(dm, section, section, c, PETSC_TRUE,
-                                       &num_indices, &indices, NULL, NULL);
-    CHKERRQ(ierr);
-  }
-  if (elem_offset != num_elem*PetscPowInt(P, dim))
-    SETERRQ3(PETSC_COMM_SELF, PETSC_ERR_LIB,
-             "ElemRestriction of size (%D,%D) initialized %D nodes", num_elem,
-             PetscPowInt(P, dim),elem_offset);
-  if (iter_is) {
-    ierr = ISRestoreIndices(iter_is, &iter_indices); CHKERRQ(ierr);
-  }
-  ierr = ISDestroy(&iter_is); CHKERRQ(ierr);
 
-  ierr = DMGetLocalVector(dm, &U_loc); CHKERRQ(ierr);
-  ierr = VecGetLocalSize(U_loc, &num_dof); CHKERRQ(ierr);
-  ierr = DMRestoreLocalVector(dm, &U_loc); CHKERRQ(ierr);
-  CeedElemRestrictionCreate(ceed, num_elem, PetscPowInt(P, dim),
-                            field_offsets[num_fields], 1, num_dof, CEED_MEM_HOST, CEED_COPY_VALUES,
-                            restr_indices, elem_restr);
-  ierr = PetscFree(restr_indices); CHKERRQ(ierr);
+  CeedElemRestrictionCreate(ceed, num_elem, elem_size, num_comp,
+                            1, num_dof, CEED_MEM_HOST, CEED_COPY_VALUES,
+                            elem_restr_offsets, elem_restr);
+  ierr = PetscFree(elem_restr_offsets); CHKERRQ(ierr);
+
   PetscFunctionReturn(0);
 };
 
@@ -208,22 +101,23 @@ PetscErrorCode CreateRestrictionFromPlexOriented(Ceed ceed, DM dm,
   ierr = PetscMalloc1(num_elem*dim*PetscPowInt(P, dim), &orient_indices_u);
   CHKERRQ(ierr);
   for (p = 0, elem_offset = 0; p < num_elem; p++) {
-    PetscInt num_indices, *indices;
+    PetscInt num_indices, *indices, faces_per_elem, dofs_per_face;
     ierr = DMPlexGetClosureIndices(dm, section, section, p, PETSC_TRUE,
                                    &num_indices, &indices, NULL, NULL);
     CHKERRQ(ierr);
-
-    ierr = DMPlexGetConeOrientation(dm, p, &ornt); CHKERRQ(ierr);
-
     restr_indices_p[p] = indices[num_indices - 1];
-    for (PetscInt e = 0; e < 4; e++) { // number of face/element
-      for (PetscInt i = 0; i < 2; i++) { // number of dof/face
-        PetscInt ii = 2*e + i;
+    ierr = DMPlexGetConeOrientation(dm, p, &ornt); CHKERRQ(ierr);
+    // Get number of faces per element
+    ierr = DMPlexGetConeSize(dm, p, &faces_per_elem); CHKERRQ(ierr);
+    dofs_per_face = faces_per_elem - 2;
+    for (PetscInt f = 0; f < faces_per_elem; f++) {
+      for (PetscInt i = 0; i < dofs_per_face; i++) {
+        PetscInt ii = dofs_per_face*f + i;
         // Essential boundary conditions are encoded as -(loc+1), but we don't care so we decode.
         PetscInt loc = Involute(indices[ii*num_comp[0]]);
         restr_indices_u[elem_offset] = loc;
         // Set orientation
-        orient_indices_u[elem_offset] = ornt[e] < 0;
+        orient_indices_u[elem_offset] = ornt[f] < 0;
         elem_offset++;
       }
     }
@@ -231,10 +125,11 @@ PetscErrorCode CreateRestrictionFromPlexOriented(Ceed ceed, DM dm,
                                        &num_indices, &indices, NULL, NULL);
     CHKERRQ(ierr);
   }
-  if (elem_offset != num_elem*dim*PetscPowInt(P, dim))
-    SETERRQ3(PETSC_COMM_SELF, PETSC_ERR_LIB,
-             "ElemRestriction of size (%D,%D) initialized %D nodes", num_elem,
-             dim*PetscPowInt(P, dim),elem_offset);
+  //if (elem_offset != num_elem*dim*PetscPowInt(P, dim))
+  //  SETERRQ(PETSC_COMM_SELF, PETSC_ERR_LIB,
+  //          "ElemRestriction of size (%" PetscInt_FMT ", %" PetscInt_FMT" )
+  //          initialized %" PetscInt_FMT " nodes", num_elem,
+  //          dim*PetscPowInt(P, dim),elem_offset);
 
   ierr = DMGetLocalVector(dm, &U_loc); CHKERRQ(ierr);
   ierr = VecGetLocalSize(U_loc, &num_dof); CHKERRQ(ierr);
@@ -259,13 +154,11 @@ PetscErrorCode CreateRestrictionFromPlexOriented(Ceed ceed, DM dm,
 PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
                             ProblemData *problem_data, PetscInt U_g_size,
                             PetscInt U_loc_size, CeedData ceed_data,
-                            CeedVector rhs_ceed, CeedVector *target,
-                            CeedVector true_ceed) {
+                            CeedVector rhs_ceed, CeedVector *target) {
   int           ierr;
   CeedInt       P = app_ctx->degree + 1;
   // Number of quadratures in 1D, q_extra is set in cl-options.c
   CeedInt       Q = P + 1 + app_ctx->q_extra;
-  CeedInt       num_qpts = Q*Q; // Number of quadratures per element
   CeedInt       dim, num_comp_x, num_comp_u, num_comp_p;
   DM            dm_coord;
   Vec           coords;
@@ -279,22 +172,34 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   // ---------------------------------------------------------------------------
   // libCEED bases:Hdiv basis_u and Lagrange basis_x
   // ---------------------------------------------------------------------------
-  ierr = DMGetDimension(dm, &dim); CHKERRQ(ierr);
+  dim = problem_data->dim;
   num_comp_x = dim;
-  num_comp_u = 1;   // One vector dof
-  num_comp_p = 1;   // One constant dof
+  num_comp_u = 1;   // one vector dof
+  num_comp_p = 1;   // one vector dof
+  // Number of quadratures per element
+  CeedInt       num_qpts = PetscPowInt(Q, dim);
   // Pressure and velocity dof per element
   CeedInt       P_p = 1, P_u = dim*PetscPowInt(P, dim);
   CeedScalar    q_ref[dim*num_qpts], q_weights[num_qpts];
   CeedScalar    div[P_u*num_qpts], interp_u[dim*P_u*num_qpts],
                 interp_p[P_p*num_qpts], *grad=NULL;
-  HdivBasisQuad(Q, q_ref, q_weights, interp_u, div,
-                problem_data->quadrature_mode);
-  L2BasisP0(Q, q_ref, q_weights, interp_p, problem_data->quadrature_mode);
-  CeedBasisCreateHdiv(ceed, CEED_TOPOLOGY_QUAD, num_comp_u, P_u, num_qpts,
-                      interp_u, div, q_ref, q_weights, &ceed_data->basis_u);
-  CeedBasisCreateH1(ceed, CEED_TOPOLOGY_QUAD, num_comp_p, 1, num_qpts, interp_p,
-                    grad, q_ref,q_weights, &ceed_data->basis_p);
+  if (dim == 2) {
+    HdivBasisQuad(Q, q_ref, q_weights, interp_u, div,
+                  problem_data->quadrature_mode);
+    CeedBasisCreateHdiv(ceed, CEED_TOPOLOGY_QUAD, num_comp_u, P_u, num_qpts,
+                        interp_u, div, q_ref, q_weights, &ceed_data->basis_u);
+    L2BasisP0(dim, Q, q_ref, q_weights, interp_p, problem_data->quadrature_mode);
+    CeedBasisCreateH1(ceed, CEED_TOPOLOGY_QUAD, num_comp_p, 1, num_qpts, interp_p,
+                      grad, q_ref,q_weights, &ceed_data->basis_p);
+  } else {
+    HdivBasisHex(Q, q_ref, q_weights, interp_u, div, problem_data->quadrature_mode);
+    CeedBasisCreateHdiv(ceed, CEED_TOPOLOGY_HEX, num_comp_u, P_u, num_qpts,
+                        interp_u, div, q_ref, q_weights, &ceed_data->basis_u);
+    L2BasisP0(dim, Q, q_ref, q_weights, interp_p, problem_data->quadrature_mode);
+    CeedBasisCreateH1(ceed, CEED_TOPOLOGY_HEX, num_comp_p, 1, num_qpts, interp_p,
+                      grad, q_ref,q_weights, &ceed_data->basis_p);
+  }
+
   CeedBasisCreateTensorH1Lagrange(ceed, dim, num_comp_x, 2, Q,
                                   problem_data->quadrature_mode, &ceed_data->basis_x);
 
@@ -309,7 +214,7 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   PetscInt value = 0;
   // -- Coordinate restriction
   ierr = CreateRestrictionFromPlex(ceed, dm_coord, height, domain_label,
-                                   value, 2, &ceed_data->elem_restr_x); CHKERRQ(ierr);
+                                   value, &ceed_data->elem_restr_x); CHKERRQ(ierr);
   // -- Solution restriction
   ierr = CreateRestrictionFromPlexOriented(ceed, dm, P,
          &ceed_data->elem_restr_u, &ceed_data->elem_restr_p); CHKERRQ(ierr);
@@ -439,38 +344,66 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   ceed_data->op_error = op_error;
 
   // ---------------------------------------------------------------------------
-  // Setup True Qfunction: True solution projected to H(div) space
+  // Traction boundary conditions, if needed
   // ---------------------------------------------------------------------------
-  CeedBasis basis_true;
-  CeedBasisCreateTensorH1Lagrange(ceed, dim, num_comp_x, 2, 2,
-                                  CEED_GAUSS_LOBATTO, &basis_true);
-  CeedQFunction qf_true;
-  CeedOperator  op_true;
-  // Create the q-function that sets up the true solution in H(div) space
-  CeedQFunctionCreateInterior(ceed, 1, problem_data->setup_true,
-                              problem_data->setup_true_loc, &qf_true);
-  CeedQFunctionAddInput(qf_true, "x", num_comp_x, CEED_EVAL_INTERP);
-  CeedQFunctionAddInput(qf_true, "dx", dim*dim, CEED_EVAL_GRAD);
-  CeedQFunctionAddOutput(qf_true, "true_u", dim, CEED_EVAL_NONE);
-  //CeedQFunctionAddOutput(qf_true, "true_p", 1, CEED_EVAL_NONE);
 
-  // Create the operator that builds the true solution in H(div) space
-  CeedOperatorCreate(ceed, qf_true, CEED_QFUNCTION_NONE, CEED_QFUNCTION_NONE,
-                     &op_true);
-  CeedOperatorSetField(op_true, "x", ceed_data->elem_restr_x,
-                       basis_true, CEED_VECTOR_ACTIVE);
-  CeedOperatorSetField(op_true, "dx", ceed_data->elem_restr_x,
-                       basis_true, x_coord);
-  CeedOperatorSetField(op_true, "true_u", ceed_data->elem_restr_u,
+  // --- Setup
+  ierr = DMGetLabel(dm, "Face Sets", &domain_label); CHKERRQ(ierr);
+
+  // -- Basis
+  CeedInt loc_num_elem_face, num_qpts_face,
+          q_data_size_face = problem_data->q_data_size_face;
+  CeedBasis basis_x_face;
+  height = 1;
+  CeedBasisCreateTensorH1Lagrange(ceed, dim - height, num_comp_x, 2, Q,
+                                  problem_data->quadrature_mode, &basis_x_face);
+  // ---- CEED Restriction
+  CeedElemRestriction elem_restr_x_face, elem_restr_qd_i_face;
+  num_qpts_face = CeedIntPow(Q, dim - height);
+  ierr = CreateRestrictionFromPlex(ceed, dm_coord, height, domain_label, 4,
+                                   &elem_restr_x_face); CHKERRQ(ierr);
+
+  CeedElemRestrictionGetNumElements(elem_restr_x_face, &loc_num_elem_face);
+  CeedElemRestrictionCreateStrided(ceed, loc_num_elem_face, num_qpts_face,
+                                   q_data_size_face,
+                                   q_data_size_face*loc_num_elem_face*num_qpts_face,
+                                   CEED_STRIDES_BACKEND, &elem_restr_qd_i_face);
+  //printf("%d\n", loc_num_elem_face);
+  //CeedElemRestrictionView(elem_restr_x_face, stdout);
+  // ---- CEED Vector
+  CeedVector          q_data_face;
+  CeedVectorCreate(ceed, q_data_size_face*loc_num_elem_face*num_qpts_face,
+                   &q_data_face);
+  // -- QFunction
+  CeedQFunction qf_setup_face_geo;
+  CeedQFunctionCreateInterior(ceed, 1, problem_data->setup_face_geo,
+                              problem_data->setup_face_geo_loc, &qf_setup_face_geo);
+  CeedQFunctionAddInput(qf_setup_face_geo, "dx", num_comp_x*(dim-height),
+                        CEED_EVAL_GRAD);
+  CeedQFunctionAddInput(qf_setup_face_geo, "weight", 1, CEED_EVAL_WEIGHT);
+  CeedQFunctionAddOutput(qf_setup_face_geo, "qdata face", q_data_size_face,
+                         CEED_EVAL_NONE);
+  // -- Operator
+  CeedOperator op_setup_face_geo;
+  CeedOperatorCreate(ceed, qf_setup_face_geo, CEED_QFUNCTION_NONE,
+                     CEED_QFUNCTION_NONE, &op_setup_face_geo);
+  CeedOperatorSetField(op_setup_face_geo, "dx", elem_restr_x_face,
+                       basis_x_face, CEED_VECTOR_ACTIVE);
+  CeedOperatorSetField(op_setup_face_geo, "weight", CEED_ELEMRESTRICTION_NONE,
+                       basis_x_face, CEED_VECTOR_NONE);
+  CeedOperatorSetField(op_setup_face_geo, "qdata face", elem_restr_qd_i_face,
                        CEED_BASIS_COLLOCATED, CEED_VECTOR_ACTIVE);
-  //CeedOperatorSetField(op_true, "true_p", ceed_data->elem_restr_p,
-  //                     CEED_BASIS_COLLOCATED, CEED_VECTOR_ACTIVE);
-  CeedOperatorApply(op_true, x_coord, true_ceed, CEED_REQUEST_IMMEDIATE);
+  // -- Compute the quadrature data
+  CeedOperatorApply(op_setup_face_geo, x_coord, q_data_face,
+                    CEED_REQUEST_IMMEDIATE);
 
-  // Cleanup
-  CeedBasisDestroy(&basis_true);
-  CeedQFunctionDestroy(&qf_true);
-  CeedOperatorDestroy(&op_true);
+  // -- Cleanup
+  CeedBasisDestroy(&basis_x_face);
+  CeedVectorDestroy(&q_data_face);
+  CeedElemRestrictionDestroy(&elem_restr_x_face);
+  CeedElemRestrictionDestroy(&elem_restr_qd_i_face);
+  CeedQFunctionDestroy(&qf_setup_face_geo);
+  CeedOperatorDestroy(&op_setup_face_geo);
 
   CeedQFunctionDestroy(&qf_setup_rhs);
   CeedOperatorDestroy(&op_setup_rhs);

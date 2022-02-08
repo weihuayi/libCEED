@@ -15,36 +15,54 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 /// @file
-/// Mixed poisson 2D quad element using PETSc
+/// Darcy problem 2D (quad element) using PETSc
 
-#ifndef POISSON_MASS2D_H
-#define POISSON_MASS2D_H
+#ifndef DARCY_MASS2D_H
+#define DARCY_MASS2D_H
 
 #include <math.h>
 
 // -----------------------------------------------------------------------------
-// This QFunction applies the mass operator for a vector field of 2 components.
-//
+// Strong form:
+//  u       = -\grad(p)
+//  \div(u) = f
+// Weak form: Find (u,p) \in VxQ (V=H(div), Q=L^2) on \Omega
+//  (u, v) - (p, \div(v)) = -<p, v\cdot n>
+// -(q, \div(u))          = -(q, f)
+// This QFunction setup the mixed form of the above equation
 // Inputs:
-//   w     - weight of quadrature
-//   J     - dx/dX. x physical coordinate, X reference coordinate [-1,1]^dim
-//   u     - Input basis at quadrature points
+//   w     : weight of quadrature
+//   J     : dx/dX. x physical coordinate, X reference coordinate [-1,1]^dim
+//   u     : basis_u at quadrature points
+// div(u)  : divergence of basis_u at quadrature points
+//   p     : basis_p at quadrature points
 //
 // Output:
-//   v     - Output vector (test functions) at quadrature points
-// Note we need to apply Piola map on the basis, which is J*u/detJ
+//   v     : (v,u) = \int (v^T * u detJ*w) ==> \int (v^T J^T*J*u*w/detJ)
+// div(v)  : -(\div(v), p) = -\int (div(v)^T * p *w)
+//   q     : -(q, \div(u)) = -\int (q^T * div(u) *w)
+// which create the following coupled system
+//                            D = [ M  B^T ]
+//                                [ B   0  ]
+// M = (v,u), B = -(q, \div(u))
+// Note we need to apply Piola map on the basis_u, which is J*u/detJ
 // So (v,u) = \int (v^T * u detJ*w) ==> \int (v^T J^T*J*u*w/detJ)
 // -----------------------------------------------------------------------------
-CEED_QFUNCTION(SetupMass2D)(void *ctx, CeedInt Q, const CeedScalar *const *in,
-                            CeedScalar *const *out) {
+CEED_QFUNCTION(SetupDarcyMass2D)(void *ctx, CeedInt Q,
+                                 const CeedScalar *const *in,
+                                 CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
   const CeedScalar (*w) = in[0],
                    (*dxdX)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[1],
-                   (*u)[CEED_Q_VLA] = (const CeedScalar(*)[CEED_Q_VLA])in[2];
+                   (*u)[CEED_Q_VLA] = (const CeedScalar(*)[CEED_Q_VLA])in[2],
+                   (*div_u) = (const CeedScalar(*))in[3],
+                   (*p) = (const CeedScalar(*))in[4];
 
   // Outputs
-  CeedScalar (*v)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])out[0];
+  CeedScalar (*v)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])out[0],
+             (*div_v) = (CeedScalar(*))out[1],
+             (*q) = (CeedScalar(*))out[2];
   // *INDENT-ON*
 
   // Quadrature Point Loop
@@ -74,6 +92,9 @@ CEED_QFUNCTION(SetupMass2D)(void *ctx, CeedInt Q, const CeedScalar *const *in,
       for (CeedInt m = 0; m < 2; m++)
         v[k][i] += JTJ[k][m] * u1[m] * w[i]/detJ;
     }
+
+    div_v[i] = -p[i] * w[i];
+    q[i] = -div_u[i] * w[i];
   } // End of Quadrature Point Loop
 
   return 0;
@@ -81,4 +102,4 @@ CEED_QFUNCTION(SetupMass2D)(void *ctx, CeedInt Q, const CeedScalar *const *in,
 
 // -----------------------------------------------------------------------------
 
-#endif //End of POISSON_MASS2D_H
+#endif //End of DARCY_MASS2D_H

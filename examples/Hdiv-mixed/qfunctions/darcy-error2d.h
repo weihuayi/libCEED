@@ -17,22 +17,24 @@
 /// @file
 /// Compute pointwise error of the H(div) example using PETSc
 
-#ifndef ERROR2D_H
-#define ERROR2D_H
+#ifndef DARCY_ERROR_H
+#define DARCY_ERROR_H
 
 #include <math.h>
 
 // -----------------------------------------------------------------------------
 // Compuet error
 // -----------------------------------------------------------------------------
-CEED_QFUNCTION(SetupError2D)(void *ctx, const CeedInt Q,
-                             const CeedScalar *const *in,
-                             CeedScalar *const *out) {
+CEED_QFUNCTION(SetupDarcyError2D)(void *ctx, const CeedInt Q,
+                                  const CeedScalar *const *in,
+                                  CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
-  const CeedScalar (*dxdX)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[0],
-                   (*u)[CEED_Q_VLA] = (const CeedScalar(*)[CEED_Q_VLA])in[1],
-                   (*target) = in[2], (*w) = in[3];
+  const CeedScalar (*w) = in[0], 
+                   (*dxdX)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[1],
+                   (*u)[CEED_Q_VLA] = (const CeedScalar(*)[CEED_Q_VLA])in[2],
+                   (*p) = (const CeedScalar(*))in[3],
+                   (*target) = in[4];
   // Outputs
   CeedScalar (*error) = out[0];
   // Quadrature Point Loop
@@ -50,13 +52,13 @@ CEED_QFUNCTION(SetupError2D)(void *ctx, const CeedInt Q,
         uh[k] += J[k][m] * u[m][i]/detJ;
     }
     // Error
-    error[i+0*Q] = (uh[0] - target[i+0*Q])*(uh[0] - target[i+0*Q])*w[i]*detJ;
-    error[i+1*Q] = (uh[1] - target[i+1*Q])*(uh[1] - target[i+1*Q])*w[i]*detJ;
-
+    error[i+0*Q] = (p[i] - target[i+0*Q])*(p[i] - target[i+0*Q])*w[i]*detJ;
+    error[i+1*Q] = (uh[0] - target[i+1*Q])*(uh[0] - target[i+1*Q])*w[i]*detJ;
+    error[i+2*Q] = (uh[1] - target[i+2*Q])*(uh[1] - target[i+2*Q])*w[i]*detJ;
   } // End of Quadrature Point Loop
 
   return 0;
 }
 // -----------------------------------------------------------------------------
 
-#endif // End ERROR2D_H
+#endif // End DARCY_ERROR_H

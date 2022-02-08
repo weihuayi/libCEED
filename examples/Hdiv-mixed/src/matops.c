@@ -67,7 +67,7 @@ PetscErrorCode ComputeError(User user, Vec X, CeedVector target,
   PetscScalar *x;
   PetscMemType mem_type;
   CeedVector collocated_error;
-  CeedInt length;
+  CeedSize length;
 
   PetscFunctionBeginUser;
   CeedVectorGetLength(target, &length);
@@ -135,72 +135,6 @@ PetscErrorCode ComputeError(User user, Vec X, CeedVector target,
   CeedVectorDestroy(&collocated_error);
   CeedVectorDestroy(&collocated_error_u);
   CeedVectorDestroy(&collocated_error_p);
-
-  PetscFunctionReturn(0);
-};
-
-// -----------------------------------------------------------------------------
-// This function calculates the error in the final solution
-// -----------------------------------------------------------------------------
-PetscErrorCode ComputeErrorProj(User user, Vec X, CeedVector true_ceed,
-                                CeedScalar *l2_proj_u, CeedScalar *l2_proj_p) {
-  PetscErrorCode ierr;
-  PetscScalar *x;
-  PetscMemType mem_type;
-  PetscFunctionBeginUser;
-
-  // Global-to-local
-  ierr = DMGlobalToLocal(user->dm, X, INSERT_VALUES, user->X_loc); CHKERRQ(ierr);
-
-  // Setup CEED vector
-  ierr = VecGetArrayAndMemType(user->X_loc, &x, &mem_type); CHKERRQ(ierr);
-  CeedVectorSetArray(user->x_ceed, MemTypeP2C(mem_type), CEED_USE_POINTER, x);
-
-  // -- Multiplicity calculation
-  CeedVector mult_vec;
-  CeedScalar *true_array, *soln;
-  const CeedScalar *mult_array;
-  CeedInt c_start, c_end, num_elem, length;
-  ierr = DMPlexGetHeightStratum(user->dm, 0, &c_start, &c_end); CHKERRQ(ierr);
-  num_elem = c_end -c_start;
-  CeedVectorGetLength(true_ceed, &length);
-  CeedScalar ue[length-num_elem], pe[num_elem];
-  CeedElemRestrictionCreateVector(user->elem_restr_u, &mult_vec,
-                                  NULL);
-  CeedElemRestrictionGetMultiplicity(user->elem_restr_u, mult_vec);
-  // -- Divide true_ceed by mult_vec and subtract it from numerical solution
-  CeedVectorGetArray(user->x_ceed, CEED_MEM_HOST, &soln);
-  CeedVectorGetArray(true_ceed, CEED_MEM_HOST, &true_array);
-  CeedVectorGetArrayRead(mult_vec, CEED_MEM_HOST, &mult_array);
-  for (CeedInt i = 0; i < length-num_elem; i++) {
-    ue[i] = (true_array[i+num_elem]/mult_array[i+num_elem] - soln[i+num_elem]);
-  }
-  for (CeedInt j = 0; j < num_elem; j++) {
-    pe[j] = (true_array[0] - soln[j]);
-  }
-  // Restore CEED vector
-  CeedVectorRestoreArray(user->x_ceed, &soln);
-  CeedVectorRestoreArray(true_ceed, &true_array);
-  CeedVectorRestoreArrayRead(mult_vec, &mult_array);
-
-  // Restore PETSc vector
-  CeedVectorTakeArray(user->x_ceed, MemTypeP2C(mem_type), NULL);
-  ierr = VecRestoreArrayReadAndMemType(user->X_loc, (const PetscScalar **)&x);
-  CHKERRQ(ierr);
-
-  CeedVector error_u, error_p;
-  CeedVectorCreate(user->ceed, num_elem, &error_p);
-  CeedVectorCreate(user->ceed, length-num_elem, &error_u);
-  CeedVectorSetArray(error_p, CEED_MEM_HOST, CEED_USE_POINTER, pe);
-  CeedVectorSetArray(error_u, CEED_MEM_HOST, CEED_USE_POINTER, ue);
-
-  CeedVectorNorm(error_p, CEED_NORM_2, l2_proj_p);
-  CeedVectorNorm(error_u, CEED_NORM_2, l2_proj_u);
-
-  // Cleanup
-  CeedVectorDestroy(&error_u);
-  CeedVectorDestroy(&error_p);
-  CeedVectorDestroy(&mult_vec);
 
   PetscFunctionReturn(0);
 };

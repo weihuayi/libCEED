@@ -17,20 +17,36 @@
 /// @file
 /// Compute pointwise error of the H(div) example using PETSc
 
-#ifndef ERROR2D_H
-#define ERROR2D_H
+#ifndef ERROR3D_H
+#define ERROR3D_H
 
 #include <math.h>
 
 // -----------------------------------------------------------------------------
+// Compute determinant of 3x3 matrix
+// -----------------------------------------------------------------------------
+#ifndef DetMat
+#define DetMat
+CEED_QFUNCTION_HELPER CeedScalar ComputeDetMat(const CeedScalar A[3][3]) {
+  // Compute det(A)
+  const CeedScalar B11 = A[1][1]*A[2][2] - A[1][2]*A[2][1];
+  const CeedScalar B12 = A[0][2]*A[2][1] - A[0][1]*A[2][2];
+  const CeedScalar B13 = A[0][1]*A[1][2] - A[0][2]*A[1][1];
+  CeedScalar detA = A[0][0]*B11 + A[1][0]*B12 + A[2][0]*B13;
+
+  return detA;
+};
+#endif
+
+// -----------------------------------------------------------------------------
 // Compuet error
 // -----------------------------------------------------------------------------
-CEED_QFUNCTION(SetupError2D)(void *ctx, const CeedInt Q,
+CEED_QFUNCTION(SetupError3D)(void *ctx, const CeedInt Q,
                              const CeedScalar *const *in,
                              CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
-  const CeedScalar (*dxdX)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[0],
+  const CeedScalar (*dxdX)[3][CEED_Q_VLA] = (const CeedScalar(*)[3][CEED_Q_VLA])in[0],
                    (*u)[CEED_Q_VLA] = (const CeedScalar(*)[CEED_Q_VLA])in[1],
                    (*target) = in[2], (*w) = in[3];
   // Outputs
@@ -39,19 +55,21 @@ CEED_QFUNCTION(SetupError2D)(void *ctx, const CeedInt Q,
   CeedPragmaSIMD
   for (CeedInt i=0; i<Q; i++) {
     // Setup, J = dx/dX
-    const CeedScalar J[2][2] = {{dxdX[0][0][i], dxdX[1][0][i]},
-                                {dxdX[0][1][i], dxdX[1][1][i]}};
-    const CeedScalar detJ = J[0][0]*J[1][1] - J[0][1]*J[1][0];             
+    const CeedScalar J[3][3] = {{dxdX[0][0][i], dxdX[1][0][i], dxdX[2][0][i]},
+                                {dxdX[0][1][i], dxdX[1][1][i], dxdX[2][1][i]},
+                                {dxdX[0][2][i], dxdX[1][2][i], dxdX[2][2][i]}};
+    const CeedScalar detJ = ComputeDetMat(J);
     // Compute Piola map:uh = J*u/detJ
-    CeedScalar uh[2];
-    for (CeedInt k = 0; k < 2; k++) {
+    CeedScalar uh[3];
+    for (CeedInt k = 0; k < 3; k++) {
       uh[k] = 0;
-      for (CeedInt m = 0; m < 2; m++)
+      for (CeedInt m = 0; m < 3; m++)
         uh[k] += J[k][m] * u[m][i]/detJ;
     }
     // Error
     error[i+0*Q] = (uh[0] - target[i+0*Q])*(uh[0] - target[i+0*Q])*w[i]*detJ;
     error[i+1*Q] = (uh[1] - target[i+1*Q])*(uh[1] - target[i+1*Q])*w[i]*detJ;
+    error[i+2*Q] = (uh[2] - target[i+2*Q])*(uh[2] - target[i+2*Q])*w[i]*detJ;
 
   } // End of Quadrature Point Loop
 
@@ -59,4 +77,4 @@ CEED_QFUNCTION(SetupError2D)(void *ctx, const CeedInt Q,
 }
 // -----------------------------------------------------------------------------
 
-#endif // End ERROR2D_H
+#endif // End ERROR3D_H

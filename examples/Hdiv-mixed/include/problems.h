@@ -6,12 +6,13 @@
 // -----------------------------------------------------------------------------
 // Set up problems function prototype
 // -----------------------------------------------------------------------------
-// 1) poisson-quad2d
-PetscErrorCode Hdiv_POISSON_MASS2D(ProblemData *problem_data, void *ctx);
+// 1) darcy2d
+PetscErrorCode Hdiv_DARCY2D(ProblemData *problem_data, void *ctx);
 
-// 2) poisson-hex3d
+// 2) darcy3d
+PetscErrorCode Hdiv_DARCY3D(ProblemData *problem_data, void *ctx);
 
-// 3) poisson-prism3d
+// 3) darcy3dprism
 
 // 4) richard
 

@@ -16,7 +16,8 @@
 
 // Build L2 constant basis
 
-static void L2BasisP0(CeedInt Q, CeedScalar *q_ref, CeedScalar *q_weights,
+static void L2BasisP0(CeedInt dim, CeedInt Q, CeedScalar *q_ref,
+                      CeedScalar *q_weights,
                       CeedScalar *interp, CeedQuadMode quad_mode) {
 
   // Get 1D quadrature on [-1,1]
@@ -31,17 +32,33 @@ static void L2BasisP0(CeedInt Q, CeedScalar *q_ref, CeedScalar *q_weights,
   }
 
   // P0 L2 basis is just a constant
-  CeedScalar P0[1] = {1.0};
+  CeedScalar P0 = 1.0;
   // Loop over quadrature points
-  for (CeedInt i=0; i<Q; i++) {
-    for (CeedInt j=0; j<Q; j++) {
-      CeedInt k1 = Q*i+j;
-      q_ref[k1] = q_ref_1d[j];
-      q_ref[k1 + Q*Q] = q_ref_1d[i];
-      q_weights[k1] = q_weight_1d[j]*q_weight_1d[i];
-      interp[k1] = P0[0];
+  if (dim == 2) {
+    for (CeedInt i=0; i<Q; i++) {
+      for (CeedInt j=0; j<Q; j++) {
+        CeedInt k1 = Q*i+j;
+        q_ref[k1] = q_ref_1d[j];
+        q_ref[k1 + Q*Q] = q_ref_1d[i];
+        q_weights[k1] = q_weight_1d[j]*q_weight_1d[i];
+        interp[k1] = P0;
+      }
+    }
+  } else {
+    for (CeedInt k=0; k<Q; k++) {
+      for (CeedInt i=0; i<Q; i++) {
+        for (CeedInt j=0; j<Q; j++) {
+          CeedInt k1 = Q*Q*k+Q*i+j;
+          q_ref[k1 + 0*Q*Q] = q_ref_1d[j];
+          q_ref[k1 + 1*Q*Q] = q_ref_1d[i];
+          q_ref[k1 + 2*Q*Q] = q_ref_1d[k];
+          q_weights[k1] = q_weight_1d[j]*q_weight_1d[i]*q_weight_1d[k];
+          interp[k1] = P0;
+        }
+      }
     }
   }
+
 }
 
 

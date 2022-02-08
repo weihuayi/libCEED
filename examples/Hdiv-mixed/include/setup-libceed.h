@@ -11,7 +11,7 @@ PetscErrorCode CeedDataDestroy(CeedData ceed_data);
 PetscInt Involute(PetscInt i);
 // Utility function to create local CEED restriction from DMPlex
 PetscErrorCode CreateRestrictionFromPlex(Ceed ceed, DM dm,
-    CeedInt height, DMLabel domain_label, CeedInt value, CeedInt P,
+    CeedInt height, DMLabel domain_label, CeedInt value,
     CeedElemRestriction *elem_restr);
 // Utility function to create local CEED Oriented restriction from DMPlex
 PetscErrorCode CreateRestrictionFromPlexOriented(Ceed ceed, DM dm, CeedInt P,
@@ -20,6 +20,5 @@ PetscErrorCode CreateRestrictionFromPlexOriented(Ceed ceed, DM dm, CeedInt P,
 PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
                             ProblemData *problem_data, PetscInt U_g_size,
                             PetscInt U_loc_size, CeedData ceed_data,
-                            CeedVector rhs_ceed, CeedVector *target,
-                            CeedVector true_ceed);
+                            CeedVector rhs_ceed, CeedVector *target);
 #endif // setuplibceed_h
