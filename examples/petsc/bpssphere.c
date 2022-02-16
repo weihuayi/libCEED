@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
   ierr = DMViewFromOptions(dm, NULL, "-dm_view"); CHKERRQ(ierr);
 
   // Create DM
-  ierr = SetupDMByDegree(dm, degree, num_comp_u, topo_dim, false,
+  ierr = SetupDMByDegree(dm, degree, q_extra, num_comp_u, topo_dim, false,
                          (BCFunction)NULL);
   CHKERRQ(ierr);
 
@@ -195,13 +195,14 @@ int main(int argc, char **argv) {
     ierr = PetscPrintf(comm,
                        "\n-- CEED Benchmark Problem %d on the Sphere -- libCEED + PETSc --\n"
                        "  libCEED:\n"
-                       "    libCEED Backend                    : %s\n"
-                       "    libCEED Backend MemType            : %s\n"
+                       "    libCEED Backend                         : %s\n"
+                       "    libCEED Backend MemType                 : %s\n"
                        "  Mesh:\n"
-                       "    Number of 1D Basis Nodes (p)       : %d\n"
-                       "    Number of 1D Quadrature Points (q) : %d\n"
-                       "    Global nodes                       : %" PetscInt_FMT "\n",
-                       bp_choice+1, ceed_resource, CeedMemTypes[mem_type_backend], P, Q,
+                       "    Number of 1D Basis Nodes (P)            : %d\n"
+                       "    Number of 1D Quadrature Points (Q)      : %d\n"
+                       "    Additional quadrature points (q_extra)  : %d\n"
+                       "    Global nodes                            : %D\n",
+                       bp_choice+1, ceed_resource, CeedMemTypes[mem_type_backend], P, Q, q_extra,
                        g_size/num_comp_u); CHKERRQ(ierr);
   }
 
@@ -324,10 +325,10 @@ int main(int argc, char **argv) {
     if (!test_mode || reason < 0 || rnorm > 1e-8) {
       ierr = PetscPrintf(comm,
                          "  KSP:\n"
-                         "    KSP Type                           : %s\n"
-                         "    KSP Convergence                    : %s\n"
-                         "    Total KSP Iterations               : %" PetscInt_FMT "\n"
-                         "    Final rnorm                        : %e\n",
+                         "    KSP Type                                : %s\n"
+                         "    KSP Convergence                         : %s\n"
+                         "    Total KSP Iterations                    : %D\n"
+                         "    Final rnorm                             : %e\n",
                          ksp_type, KSPConvergedReasons[reason], its,
                          (double)rnorm); CHKERRQ(ierr);
     }
@@ -345,14 +346,14 @@ int main(int argc, char **argv) {
         ierr = MPI_Allreduce(&my_rt, &rt_max, 1, MPI_DOUBLE, MPI_MAX, comm);
         CHKERRQ(ierr);
         ierr = PetscPrintf(comm,
-                           "    Pointwise Error (max)              : %e\n"
-                           "    CG Solve Time                      : %g (%g) sec\n",
+                           "    Pointwise Error (max)                   : %e\n"
+                           "    CG Solve Time                           : %g (%g) sec\n",
                            (double)max_error, rt_max, rt_min); CHKERRQ(ierr);
       }
     }
     if (benchmark_mode && (!test_mode)) {
       ierr = PetscPrintf(comm,
-                         "    DoFs/Sec in CG                     : %g (%g) million\n",
+                         "    DoFs/Sec in CG                            : %g (%g) million\n",
                          1e-6*g_size*its/rt_max, 1e-6*g_size*its/rt_min); CHKERRQ(ierr);
     }
   }

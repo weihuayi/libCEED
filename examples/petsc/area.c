@@ -139,7 +139,7 @@ int main(int argc, char **argv) {
   }
 
   // Create DM
-  ierr = SetupDMByDegree(dm, degree, num_comp_u, topo_dim, false,
+  ierr = SetupDMByDegree(dm, degree, q_extra, num_comp_u, topo_dim, false,
                          (BCFunction)NULL);
   CHKERRQ(ierr);
 
@@ -185,15 +185,16 @@ int main(int argc, char **argv) {
     ierr = PetscPrintf(comm,
                        "\n-- libCEED + PETSc Surface Area of a Manifold --\n"
                        "  libCEED:\n"
-                       "    libCEED Backend                    : %s\n"
-                       "    libCEED Backend MemType            : %s\n"
+                       "    libCEED Backend                         : %s\n"
+                       "    libCEED Backend MemType                 : %s\n"
                        "  Mesh:\n"
-                       "    Number of 1D Basis Nodes (p)       : %d\n"
-                       "    Number of 1D Quadrature Points (q) : %d\n"
-                       "    Global nodes                       : %" PetscInt_FMT "\n"
-                       "    DoF per node                       : %" PetscInt_FMT "\n"
-                       "    Global DoFs                        : %" PetscInt_FMT "\n",
-                       used_resource, CeedMemTypes[mem_type_backend], P, Q,
+                       "    Number of 1D Basis Nodes (P)            : %d\n"
+                       "    Number of 1D Quadrature Points (Q)      : %d\n"
+                       "    Additional quadrature points (q_extra)  : %d\n"
+                       "    Global nodes                            : %D\n"
+                       "    DoF per node                            : %D\n"
+                       "    Global DoFs                             : %D\n",
+                       used_resource, CeedMemTypes[mem_type_backend], P, Q, q_extra,
                        g_size/num_comp_u, num_comp_u, g_size); CHKERRQ(ierr);
   }
 
@@ -246,12 +247,17 @@ int main(int argc, char **argv) {
   PetscReal error = fabs(area - exact_surface_area);
   PetscReal tol = 5e-6;
   if (!test_mode || error > tol) {
-    ierr = PetscPrintf(comm, "Exact mesh surface area    : % .14g\n",
+    ierr = PetscPrintf(comm,
+                       "Exact mesh surface area                     : % .14g\n",
                        exact_surface_area);
     CHKERRQ(ierr);
-    ierr = PetscPrintf(comm, "Computed mesh surface area : % .14g\n", area);
+    ierr = PetscPrintf(comm,
+                       "Computed mesh surface area                  : % .14g\n",
+                       area);
     CHKERRQ(ierr);
-    ierr = PetscPrintf(comm, "Area error                 : % .14g\n", error);
+    ierr = PetscPrintf(comm,
+                       "Area error                                  : % .14g\n",
+                       error);
     CHKERRQ(ierr);
   }
 
