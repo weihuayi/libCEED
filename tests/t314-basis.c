@@ -29,10 +29,10 @@ int main(int argc, char **argv) {
 
   CeedInit(argv[1], &ceed);
 
-  for (CeedInt dim=1; dim<=3; dim++) {
+  for (CeedInt dim=3; dim<=3; dim++) {
     CeedVector X, X_q, U, U_q, ones, grad_T_ones;
     CeedBasis basis_x_lobatto, basis_u_gauss;
-    CeedInt P = 8, Q = 10, P_dim = CeedIntPow(P, dim), Q_dim = CeedIntPow(Q, dim),
+    CeedInt P = 2, Q = 3, P_dim = CeedIntPow(P, dim), Q_dim = CeedIntPow(Q, dim),
             X_dim = CeedIntPow(2, dim);
     CeedScalar x[X_dim*dim], u[P_dim];
     const CeedScalar *x_q, *u_q, *grad_t_ones_array;
@@ -73,6 +73,7 @@ int main(int argc, char **argv) {
     // Calculate G u at quadrature points, G' * 1 at dofs
     CeedBasisCreateTensorH1Lagrange(ceed, dim, 1, P, Q, CEED_GAUSS, &basis_u_gauss);
     CeedBasisApply(basis_u_gauss, 1, CEED_NOTRANSPOSE, CEED_EVAL_GRAD, U, U_q);
+    CeedVectorView(U_q, "%12.8f", stdout);
     CeedBasisApply(basis_u_gauss, 1, CEED_TRANSPOSE, CEED_EVAL_GRAD, ones,
                    grad_T_ones);
 
