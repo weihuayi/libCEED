@@ -8,7 +8,7 @@
 #include"./gemm_tuning/mi100.h"
 
 ////////////////////////////////////////////////////////////////////////////////
-void* gemm_selector_get_data(int gpu_arch, char precision, char transA)
+static void* gemm_selector_get_data(int gpu_arch, char precision, char transA)
 {
   // a default
   void* data = (void*)&sgemm_nn_mi100;
@@ -38,6 +38,9 @@ void* gemm_selector_get_data(int gpu_arch, char precision, char transA)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+#ifdef __cplusplus
+CEED_INTERN "C"
+#endif
 void gemm_selector(
         int gpu_arch,
         char precision, char transA,
