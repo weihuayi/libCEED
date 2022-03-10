@@ -59,7 +59,10 @@ magma_dgemm_nontensor(
   char   precision = 'd';
   gemm_selector( arch, precision, trans, m, n, k, &nbatch, &use_magmablas );
 
+  #if 0
   printf("%c %c -- (%3d, %3d, %3d) -- nbatch = %3d, use_magma = %d\n", trans, precision, m, n, k, nbatch, use_magmablas);
+  #endif
+
   // perform the dgemm operation
   if ( nbatch == n) {
     // no batching, do not use magmablas
