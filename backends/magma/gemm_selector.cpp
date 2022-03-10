@@ -1,6 +1,8 @@
 #include<stdio.h>
 #include<vector>
+#include <limits>
 #include <sys/time.h>
+#include "ceed-magma.h"
 
 #include"./gemm_tuning/indices.h"
 #include"./gemm_tuning/a100.h"
@@ -38,25 +40,22 @@ static void* gemm_selector_get_data(int gpu_arch, char precision, char transA)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-#ifdef __cplusplus
-CEED_INTERN "C"
-#endif
 void gemm_selector(
         int gpu_arch,
         char precision, char transA,
         int m, int n, int k,
-        int &nbatch, int &use_magma )
+        int *nbatch, int *use_magma )
 {
     // defaults
-    nbatch    = n;
-    use_magma = 0;
+    *nbatch    = n;
+    *use_magma = 0;
     std::vector< std::vector<int> > *data = NULL;
     data =  (std::vector< std::vector<int> >*)
             gemm_selector_get_data(gpu_arch, precision, transA);
 
     int ir = -1;
     double norm = std::numeric_limits<double>::max();
-    for(int i = 0; i < data->size(); i++) {
+    for(size_t i = 0; i < data->size(); i++) {
         int im = (*data)[i][M_INDEX];
         int in = (*data)[i][N_INDEX];
         int ik = (*data)[i][K_INDEX];
@@ -80,7 +79,13 @@ void gemm_selector(
     }
 
     if( ir >= 0 ) {
-        use_magma   = (*data)[ir][USE_MAGMA_INDEX];
+        #if 0
+        printf("matching record {%3d, %3d, %3d, %3d, %3d}\n",
+                (*data)[ir][M_INDEX], (*data)[ir][N_INDEX], (*data)[ir][K_INDEX],
+                (*data)[ir][N_BATCH_INDEX],
+                (*data)[ir][USE_MAGMA_INDEX] );
+        #endif
+        *use_magma   = (*data)[ir][USE_MAGMA_INDEX];
 
         // if the closest match indicates that n = nbatch,
         // that means calling the regular non-batch gemm.
@@ -88,6 +93,6 @@ void gemm_selector(
         // entry of the matching record
         int n_      = (*data)[ir][N_INDEX];
         int nbatch_ = (*data)[ir][N_BATCH_INDEX];
-        nbatch      = (n_ == nbatch_) ? n : nbatch_;
+        *nbatch     = (n_ == nbatch_) ? n : nbatch_;
     }
 }

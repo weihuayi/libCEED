@@ -57,8 +57,9 @@ magma_dgemm_nontensor(
   // get tuning decision
   char       trans = (transA == MagmaNoTrans) ? 'n' : 't';
   char   precision = 'd';
-  gemm_selector( arch, precision, trans, m, n, k, nbatch, use_magmablas );
+  gemm_selector( arch, precision, trans, m, n, k, &nbatch, &use_magmablas );
 
+  printf("%c %c -- (%3d, %3d, %3d) -- nbatch = %3d, use_magma = %d\n", trans, precision, m, n, k, nbatch, use_magmablas);
   // perform the dgemm operation
   if ( nbatch == n) {
     // no batching, do not use magmablas
@@ -334,6 +335,10 @@ magma_dgemm_nontensor(
     else if (m <= 729 && k <= 1000) { use_magmablas = false; n1 =   n;}
     else { use_magmablas = false; n1 =   n;}
   }
+
+  #if 0
+  printf("%c %c -- (%3d, %3d, %3d) -- nbatch = %3d, use_magma = %d\n", trans, precision, m, n, k, n1, use_magmablas);
+  #endif
 
   // perform the dgemm operation
   if ( n1 == n) {
