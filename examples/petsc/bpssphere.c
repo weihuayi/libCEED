@@ -201,7 +201,7 @@ int main(int argc, char **argv) {
                        "    Number of 1D Basis Nodes (P)            : %d\n"
                        "    Number of 1D Quadrature Points (Q)      : %d\n"
                        "    Additional quadrature points (q_extra)  : %d\n"
-                       "    Global nodes                            : %D\n",
+                       "    Global nodes                            : %" PetscInt_FMT "\n",
                        bp_choice+1, ceed_resource, CeedMemTypes[mem_type_backend], P, Q, q_extra,
                        g_size/num_comp_u); CHKERRQ(ierr);
   }
@@ -327,7 +327,7 @@ int main(int argc, char **argv) {
                          "  KSP:\n"
                          "    KSP Type                                : %s\n"
                          "    KSP Convergence                         : %s\n"
-                         "    Total KSP Iterations                    : %D\n"
+                         "    Total KSP Iterations                    : %" PetscInt_FMT "\n"
                          "    Final rnorm                             : %e\n",
                          ksp_type, KSPConvergedReasons[reason], its,
                          (double)rnorm); CHKERRQ(ierr);

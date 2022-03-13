@@ -24,6 +24,7 @@
 //     multigrid -problem bp6 -ceed /gpu/cuda
 //
 //TESTARGS -ceed {ceed_resource} -test -problem bp3 -degree 3
+//TESTARGS -ceed {ceed_resource} -test -problem bp3 -degree 3 -simplex
 
 /// @file
 /// CEED BPs 1-6 multigrid example using PETSc
@@ -285,9 +286,9 @@ int main(int argc, char **argv) {
                        "    Number of 1D Basis Nodes (P)            : %d\n"
                        "    Number of 1D Quadrature Points (Q)      : %d\n"
                        "    Additional quadrature points (q_extra)  : %d\n"
-                       "    Global Nodes                            : %D\n"
-                       "    Owned Nodes                             : %D\n"
-                       "    DoF per node                            : %D\n"
+                       "    Global Nodes                            : %" PetscInt_FMT "\n"
+                       "    Owned Nodes                             : %" PetscInt_FMT "\n"
+                       "    DoF per node                            : %" PetscInt_FMT "\n"
                        "    Element topology                        : %s\n"
                        "  Multigrid:\n"
                        "    Number of Levels                        : %d\n",
@@ -312,8 +313,8 @@ int main(int argc, char **argv) {
     if (!test_mode && (i == 0 || i == fine_level)) {
       ierr = PetscPrintf(comm,"    Level %D (%s):\n"
                          "      Number of 1D Basis Nodes (p)          : %d\n"
-                         "      Global Nodes                          : %D\n"
-                         "      Owned Nodes                           : %D\n",
+                         "      Global Nodes                          : %" PetscInt_FMT "\n"
+                         "      Owned Nodes                           : %" PetscInt_FMT "\n",
                          i, (i? "fine" : "coarse"), level_degrees[i] + 1,
                          g_size[i]/num_comp_u, l_size[i]/num_comp_u); CHKERRQ(ierr);
     }
@@ -567,7 +568,7 @@ int main(int argc, char **argv) {
                          "  KSP:\n"
                          "    KSP Type                                : %s\n"
                          "    KSP Convergence                         : %s\n"
-                         "    Total KSP Iterations                    : %D\n"
+                         "    Total KSP Iterations                    : %" PetscInt_FMT "\n"
                          "    Final rnorm                             : %e\n",
                          ksp_type, KSPConvergedReasons[reason], its,
                          (double)rnorm); CHKERRQ(ierr);
