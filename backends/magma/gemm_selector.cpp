@@ -8,19 +8,20 @@
 #include"./gemm_tuning/a100.h"
 #include"./gemm_tuning/v100.h"
 #include"./gemm_tuning/mi100.h"
+#include"./gemm_tuning/mi250x.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 static void* gemm_selector_get_data(int gpu_arch, char precision, char transA)
 {
   // a default
-  void* data = (void*)&sgemm_nn_mi100;
+  void* data = (void*)&sgemm_nn_mi250x;
 
   #ifdef HAVE_HIP
-  // TODO: data for mi250x
+  // TODO: choose between mi250x and mi100
   //if( gpu_arch >= 908 ) {
   data = ( precision == 's' ) ?
-         (( transA == 'n') ? (void*)&sgemm_nn_mi100 : (void*)&sgemm_tn_mi100 ):
-         (( transA == 'n') ? (void*)&dgemm_nn_mi100 : (void*)&dgemm_tn_mi100 );
+         (( transA == 'n') ? (void*)&sgemm_nn_mi250x : (void*)&sgemm_tn_mi250x ):
+         (( transA == 'n') ? (void*)&dgemm_nn_mi250x : (void*)&dgemm_tn_mi250x );
   //}
   #else
   // CUDA: A100 GPU or newer
