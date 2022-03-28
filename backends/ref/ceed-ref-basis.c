@@ -212,10 +212,47 @@ static int CeedBasisApply_Ref(CeedBasis basis, CeedInt num_elem,
             }
       }
     } break;
-    // LCOV_EXCL_START
     // Evaluate the divergence to/from the quadrature points
-    case CEED_EVAL_DIV:
-      return CeedError(ceed, CEED_ERROR_BACKEND, "CEED_EVAL_DIV not supported");
+    case CEED_EVAL_DIV: {
+      if (num_comp != dim) {
+        // LCOV_EXCL_START
+        return CeedError(ceed, CEED_ERROR_BACKEND,
+                         "num_comp must be equal to dim for this CeedEvalMode");
+        // LCOV_EXCL_STOP
+      }
+      const CeedInt add = (t_mode == CEED_NOTRANSPOSE);
+
+      CeedInt P = P_1d, Q = Q_1d;
+      if (t_mode == CEED_TRANSPOSE) {
+        P = Q_1d, Q = P_1d;
+      }
+      CeedScalar tmp[2][num_elem*Q*CeedIntPow(P>Q?P:Q, dim-1)];
+      const CeedScalar *interp_1d, *grad_1d;
+      ierr = CeedBasisGetInterp1D(basis, &interp_1d); CeedChkBackend(ierr);
+      ierr = CeedBasisGetGrad1D(basis, &grad_1d); CeedChkBackend(ierr);
+
+      for (CeedInt p = 0; p < dim; p++) {
+        CeedInt pre = CeedIntPow(P, dim-1), post = num_elem;
+        for (CeedInt d=0; d<dim; d++) {
+          ierr = CeedTensorContractApply(contract, pre, P, post, Q,
+                                         (p+d==dim-1)? grad_1d:interp_1d,
+                                         t_mode, add&&(d==dim-1),
+                                         (d == 0 ?
+                                          (t_mode == CEED_NOTRANSPOSE
+                                           ? u + p*num_elem*num_nodes
+                                           : u + p*num_elem*num_qpts)
+                                          : tmp[d%2]),
+                                         (d == dim-1 ?
+                                          (t_mode == CEED_TRANSPOSE
+                                           ? v + p*num_elem *num_nodes: v)
+                                          : tmp[(d+1)%2]));
+          CeedChk(ierr);
+          pre /= P;
+          post *= Q;
+        }
+      }
+    } break;
+    // LCOV_EXCL_START
     // Evaluate the curl to/from the quadrature points
     case CEED_EVAL_CURL:
       return CeedError(ceed, CEED_ERROR_BACKEND, "CEED_EVAL_CURL not supported");

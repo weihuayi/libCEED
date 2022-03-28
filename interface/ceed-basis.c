@@ -907,9 +907,9 @@ int CeedBasisApply(CeedBasis basis, CeedInt num_elem, CeedTransposeMode t_mode,
     break;
   // LCOV_EXCL_START
   case CEED_EVAL_DIV: bad_dims =
-      ((t_mode == CEED_TRANSPOSE && (u_length < num_elem*num_comp*num_qpts ||
+      ((t_mode == CEED_TRANSPOSE && (u_length < num_elem*num_qpts*num_comp ||
                                      v_length < num_elem*num_comp*num_nodes)) ||
-       (t_mode == CEED_NOTRANSPOSE && (v_length < num_elem*num_qpts*num_comp ||
+       (t_mode == CEED_NOTRANSPOSE && (v_length < num_elem*num_qpts ||
                                        u_length < num_elem*num_comp*num_nodes)));
     break;
   case CEED_EVAL_CURL: bad_dims =
