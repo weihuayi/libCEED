@@ -222,7 +222,7 @@ PetscErrorCode CreateBasisFromPlex(Ceed ceed, DM dm, DMLabel domain_label,
   if (ds_field == -1) {
     // LCOV_EXCL_START
     SETERRQ(PetscObjectComm((PetscObject) dm), PETSC_ERR_SUP,
-            "Could not find dm_field %D in DS", dm_field);
+            "Could not find dm_field %" PetscInt_FMT " in DS", dm_field);
     // LCOV_EXCL_STOP
   }
 

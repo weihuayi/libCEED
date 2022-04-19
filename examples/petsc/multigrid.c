@@ -311,7 +311,7 @@ int main(int argc, char **argv) {
   for (int i=0; i<num_levels; i++) {
     // Print level information
     if (!test_mode && (i == 0 || i == fine_level)) {
-      ierr = PetscPrintf(comm,"    Level %D (%s):\n"
+      ierr = PetscPrintf(comm,"    Level %" PetscInt_FMT " (%s):\n"
                          "      Number of 1D Basis Nodes (p)          : %d\n"
                          "      Global Nodes                          : %" PetscInt_FMT "\n"
                          "      Owned Nodes                           : %" PetscInt_FMT "\n",
