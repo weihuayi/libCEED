@@ -16,7 +16,9 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
-# After make the problem, you can run convergence test by: ./conv_test.sh -d 2 (or -d 3)
+# After make the problem, you can run convergence test by:
+#./conv_test.sh -d 2 (or -d 3)
+
 # Reading arguments with getopts options
 while getopts d: flag
 do
@@ -62,7 +64,7 @@ for ((res=${test_flags[res_start]}; res<=${test_flags[res_end]}; res+=${test_fla
             args="$args -$arg ${run_flags[$arg]}"
         fi
     done
-    ./main $args | grep "L2 Error of u and p" | awk -v i="$i" -v res="$res" '{ printf "%d,%d,%.5f,%.5f\n", i, res, $8, $9}' >> $file_name
+    ./main $args | grep "L2 error of u and p" | awk -v i="$i" -v res="$res" '{ printf "%d,%d,%.5f,%.5f\n", i, res, $8, $9}' >> $file_name
     i=$((i+1))
 done
 

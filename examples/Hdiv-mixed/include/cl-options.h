@@ -3,9 +3,6 @@
 
 #include "../include/structs.h"
 
-// Register problems to be available on the command line
-PetscErrorCode RegisterProblems_Hdiv(AppCtx app_ctx);
-
 // Process general command line options
 PetscErrorCode ProcessCommandLineOptions(MPI_Comm comm, AppCtx app_ctx);
 

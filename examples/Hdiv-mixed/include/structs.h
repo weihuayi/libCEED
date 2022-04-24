@@ -26,8 +26,8 @@ struct CeedData_ {
   CeedBasis            basis_x, basis_u, basis_p;
   CeedElemRestriction  elem_restr_x, elem_restr_u, elem_restr_U_i,
                        elem_restr_p;
-  CeedQFunction        qf_residual, qf_error;
-  CeedOperator         op_residual, op_error;
+  CeedQFunction        qf_residual, qf_jacobian, qf_error;
+  CeedOperator         op_residual, op_jacobian, op_error;
   CeedVector           x_ceed, y_ceed;
   CeedQFunctionContext pq2d_context;
 };
@@ -59,26 +59,23 @@ struct Physics_ {
   DARCY3DContext            darcy3d_ctx;
 };
 
-// PETSc user data
-typedef struct User_ *User;
-struct User_ {
-  MPI_Comm     comm;
-  Vec          X_loc, Y_loc;
-  CeedVector   x_ceed, y_ceed;
-  CeedOperator op_apply, op_error;
-  CeedElemRestriction elem_restr_u;
-  DM           dm;
-  Ceed         ceed;
-  AppCtx       app_ctx;
-  Physics      phys;
+// PETSc operator contexts
+typedef struct OperatorApplyContext_ *OperatorApplyContext;
+struct OperatorApplyContext_ {
+  MPI_Comm        comm;
+  Vec             X_loc, Y_loc;
+  CeedVector      x_ceed, y_ceed;
+  CeedOperator    op_apply;
+  DM              dm;
+  Ceed            ceed;
 };
 
 // Problem specific data
 typedef struct {
-  CeedQFunctionUser setup_rhs, residual, setup_error, setup_true,
-                    setup_face_geo;
-  const char        *setup_rhs_loc, *residual_loc, *setup_error_loc,
-        *setup_true_loc, *setup_face_geo_loc;
+  CeedQFunctionUser setup_rhs, residual, jacobian, setup_error,
+                    setup_true, setup_face_geo;
+  const char        *setup_rhs_loc, *residual_loc, *jacobian_loc,
+        *setup_error_loc, *setup_true_loc, *setup_face_geo_loc;
   CeedQuadMode      quadrature_mode;
   CeedInt           elem_node, dim, q_data_size_face;
   PetscErrorCode    (*setup_ctx)(Ceed, CeedData, Physics);

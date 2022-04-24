@@ -90,7 +90,6 @@ CEED_QFUNCTION(SetupDarcyMass3D)(void *ctx, CeedInt Q,
                                 {dxdX[0][1][i], dxdX[1][1][i], dxdX[2][1][i]},
                                 {dxdX[0][2][i], dxdX[1][2][i], dxdX[2][2][i]}};
     const CeedScalar detJ = ComputeDetMat(J);
-    const CeedScalar u1[3]   = {u[0][i], u[1][i], u[2][i]};
     // *INDENT-ON*
     // Piola map: J^T*J*u*w/detJ
     // 1) Compute J^T * J
@@ -106,11 +105,65 @@ CEED_QFUNCTION(SetupDarcyMass3D)(void *ctx, CeedInt Q,
     for (CeedInt k = 0; k < 3; k++) {
       v[k][i] = 0;
       for (CeedInt m = 0; m < 3; m++)
-        v[k][i] += JTJ[k][m] * u1[m] * w[i]/detJ;
+        v[k][i] += JTJ[k][m] * u[m][i] * w[i]/detJ;
     }
 
     div_v[i] = -p[i] * w[i];
     q[i] = -div_u[i] * w[i];
+  } // End of Quadrature Point Loop
+
+  return 0;
+}
+
+// -----------------------------------------------------------------------------
+// Jacobian evaluation for Darcy problem
+// -----------------------------------------------------------------------------
+CEED_QFUNCTION(SetupJacobianDarcyMass3D)(void *ctx, CeedInt Q,
+    const CeedScalar *const *in,
+    CeedScalar *const *out) {
+  // *INDENT-OFF*
+  // Inputs
+  const CeedScalar (*w) = in[0],
+                   (*dxdX)[3][CEED_Q_VLA] = (const CeedScalar(*)[3][CEED_Q_VLA])in[1],
+                   (*du)[CEED_Q_VLA] = (const CeedScalar(*)[CEED_Q_VLA])in[2],
+                   (*div_du) = (const CeedScalar(*))in[3],
+                   (*dp) = (const CeedScalar(*))in[4];
+
+  // Outputs
+  CeedScalar (*dv)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])out[0],
+             (*div_dv) = (CeedScalar(*))out[1],
+             (*dq) = (CeedScalar(*))out[2];
+  // *INDENT-ON*
+
+  // Quadrature Point Loop
+  CeedPragmaSIMD
+  for (CeedInt i=0; i<Q; i++) {
+    // *INDENT-OFF*
+    // Setup, J = dx/dX
+    const CeedScalar J[3][3] = {{dxdX[0][0][i], dxdX[1][0][i], dxdX[2][0][i]},
+                                {dxdX[0][1][i], dxdX[1][1][i], dxdX[2][1][i]},
+                                {dxdX[0][2][i], dxdX[1][2][i], dxdX[2][2][i]}};
+    const CeedScalar detJ = ComputeDetMat(J);
+    // *INDENT-ON*
+    // Piola map: J^T*J*u*w/detJ
+    // 1) Compute J^T * J
+    CeedScalar JTJ[3][3];
+    for (CeedInt j = 0; j < 3; j++) {
+      for (CeedInt k = 0; k < 3; k++) {
+        JTJ[j][k] = 0;
+        for (CeedInt m = 0; m < 3; m++)
+          JTJ[j][k] += J[m][j] * J[m][k];
+      }
+    }
+    // 2) Compute J^T*J*u * w /detJ
+    for (CeedInt k = 0; k < 3; k++) {
+      dv[k][i] = 0;
+      for (CeedInt m = 0; m < 3; m++)
+        dv[k][i] += JTJ[k][m] * du[m][i] * w[i]/detJ;
+    }
+
+    div_dv[i] = -dp[i] * w[i];
+    dq[i] = -div_du[i] * w[i];
   } // End of Quadrature Point Loop
 
   return 0;

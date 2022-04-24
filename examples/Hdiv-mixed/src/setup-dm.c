@@ -5,7 +5,6 @@
 // ---------------------------------------------------------------------------
 PetscErrorCode CreateDistributedDM(MPI_Comm comm, ProblemData *problem_data,
                                    DM *dm) {
-  PetscErrorCode  ierr;
   PetscSection   sec;
   PetscInt       dofs_per_face;
   PetscInt       p_start, p_end;
@@ -16,41 +15,42 @@ PetscErrorCode CreateDistributedDM(MPI_Comm comm, ProblemData *problem_data,
   PetscFunctionBeginUser;
 
   // Create DMPLEX
-  ierr = DMCreate(comm, dm); CHKERRQ(ierr);
-  ierr = DMSetType(*dm, DMPLEX); CHKERRQ(ierr);
+  PetscCall( DMCreate(comm, dm) );
+  PetscCall( DMSetType(*dm, DMPLEX) );
   // Set Tensor elements
-  ierr = PetscOptionsSetValue(NULL, "-dm_plex_simplex", "0"); CHKERRQ(ierr);
+  PetscCall( PetscOptionsSetValue(NULL, "-dm_plex_simplex", "0") );
   // Set CL options
-  ierr = DMSetFromOptions(*dm); CHKERRQ(ierr);
-  ierr = DMViewFromOptions(*dm, NULL, "-dm_view"); CHKERRQ(ierr);
+  PetscCall( DMSetFromOptions(*dm) );
+  PetscCall( DMViewFromOptions(*dm, NULL, "-dm_view") );
 
   // Get plex limits
-  ierr = DMPlexGetChart(*dm, &p_start, &p_end); CHKERRQ(ierr);
-  ierr = DMPlexGetHeightStratum(*dm, 0, &c_start, &c_end); CHKERRQ(ierr);
-  ierr = DMPlexGetHeightStratum(*dm, 1, &f_start, &f_end); CHKERRQ(ierr);
-  ierr = DMPlexGetDepthStratum(*dm, 0, &v_start, &v_end); CHKERRQ(ierr);
+  PetscCall( DMPlexGetChart(*dm, &p_start, &p_end) );
+  PetscCall( DMPlexGetHeightStratum(*dm, 0, &c_start, &c_end) );
+  PetscCall( DMPlexGetHeightStratum(*dm, 1, &f_start, &f_end) );
+  PetscCall( DMPlexGetDepthStratum(*dm, 0, &v_start, &v_end) );
   // Create section
-  ierr = PetscSectionCreate(comm, &sec); CHKERRQ(ierr);
-  ierr = PetscSectionSetNumFields(sec, 2); CHKERRQ(ierr);
-  ierr = PetscSectionSetFieldName(sec, 0, "Velocity"); CHKERRQ(ierr);
-  ierr = PetscSectionSetFieldComponents(sec, 0, 1); CHKERRQ(ierr);
-  ierr = PetscSectionSetFieldName(sec, 1, "Pressure"); CHKERRQ(ierr);
-  ierr = PetscSectionSetFieldComponents(sec, 1, 1); CHKERRQ(ierr);
-  ierr = PetscSectionSetChart(sec, p_start, p_end); CHKERRQ(ierr);
+  PetscCall( PetscSectionCreate(comm, &sec) );
+  PetscCall( PetscSectionSetNumFields(sec, 2) );
+  PetscCall( PetscSectionSetFieldName(sec, 0, "Velocity") );
+  PetscCall( PetscSectionSetFieldComponents(sec, 0, 1) );
+  PetscCall( PetscSectionSetFieldName(sec, 1, "Pressure") );
+  PetscCall( PetscSectionSetFieldComponents(sec, 1, 1) );
+  PetscCall( PetscSectionSetChart(sec, p_start, p_end) );
   // Setup dofs per face for velocity field
   for (PetscInt f = f_start; f < f_end; f++) {
-    ierr = DMPlexGetConeSize(*dm, f, &dofs_per_face); CHKERRQ(ierr);
-    ierr = PetscSectionSetFieldDof(sec, f, 0, dofs_per_face); CHKERRQ(ierr);
-    ierr = PetscSectionSetDof     (sec, f, dofs_per_face); CHKERRQ(ierr);
+    PetscCall( DMPlexGetConeSize(*dm, f, &dofs_per_face) );
+    PetscCall( PetscSectionSetFieldDof(sec, f, 0, dofs_per_face) );
+    PetscCall( PetscSectionSetDof     (sec, f, dofs_per_face) );
   }
   // Setup 1 dof per cell for pressure field
   for(PetscInt c = c_start; c < c_end; c++) {
-    ierr = PetscSectionSetFieldDof(sec, c, 1, 1); CHKERRQ(ierr);
-    ierr = PetscSectionSetDof     (sec, c, 1); CHKERRQ(ierr);
+    PetscCall( PetscSectionSetFieldDof(sec, c, 1, 1) );
+    PetscCall( PetscSectionSetDof     (sec, c, 1) );
   }
-  ierr = PetscSectionSetUp(sec); CHKERRQ(ierr);
-  ierr = DMSetSection(*dm,sec); CHKERRQ(ierr);
-  ierr = PetscSectionDestroy(&sec); CHKERRQ(ierr);
+  PetscCall( PetscSectionSetUp(sec) );
+  PetscCall( DMSetSection(*dm,sec) );
+  PetscCall( DMCreateDS(*dm) );
+  PetscCall( PetscSectionDestroy(&sec) );
 
   PetscFunctionReturn(0);
 };

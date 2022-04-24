@@ -16,6 +16,9 @@
 # software, applications, hardware, advanced system engineering and early
 # testbed platforms, in support of the nation's exascale computing imperative.
 
+# After ./conv_test.sh you can plot using
+# python conv_plot.py -f conv_test_result.csv
+
 import pandas as pd
 import argparse
 from pylab import *

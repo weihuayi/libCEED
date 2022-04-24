@@ -18,7 +18,7 @@
 /// Utility functions for setting up Darcy problem in 2D
 
 #include "../include/setup-libceed.h"
-#include "../include/problems.h"
+#include "../include/register-problem.h"
 #include "../qfunctions/darcy-rhs2d.h"
 #include "../qfunctions/darcy-mass2d.h"
 #include "../qfunctions/darcy-error2d.h"
@@ -26,12 +26,11 @@
 
 // Hdiv_DARCY2D is registered in cl-option.c
 PetscErrorCode Hdiv_DARCY2D(ProblemData *problem_data, void *ctx) {
-  User              user = *(User *)ctx;
+  Physics           phys = *(Physics *)ctx;
   MPI_Comm          comm = PETSC_COMM_WORLD;
-  PetscInt          ierr;
   PetscFunctionBeginUser;
 
-  ierr = PetscCalloc1(1, &user->phys->darcy2d_ctx); CHKERRQ(ierr);
+  PetscCall( PetscCalloc1(1, &phys->darcy2d_ctx) );
 
   // ------------------------------------------------------
   //               SET UP POISSON_QUAD2D
@@ -44,6 +43,8 @@ PetscErrorCode Hdiv_DARCY2D(ProblemData *problem_data, void *ctx) {
   problem_data->setup_rhs_loc           = SetupDarcyRhs2D_loc;
   problem_data->residual                = SetupDarcyMass2D;
   problem_data->residual_loc            = SetupDarcyMass2D_loc;
+  problem_data->jacobian                = SetupJacobianDarcyMass2D;
+  problem_data->jacobian_loc            = SetupJacobianDarcyMass2D_loc;
   problem_data->setup_error             = SetupDarcyError2D;
   problem_data->setup_error_loc         = SetupDarcyError2D_loc;
   problem_data->setup_face_geo          = SetupFaceGeo2D;
@@ -56,5 +57,6 @@ PetscErrorCode Hdiv_DARCY2D(ProblemData *problem_data, void *ctx) {
 
   PetscOptionsEnd();
 
+  PetscCall( PetscFree(phys->darcy2d_ctx) );
   PetscFunctionReturn(0);
 }

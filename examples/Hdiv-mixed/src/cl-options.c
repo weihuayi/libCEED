@@ -18,54 +18,38 @@
 /// Command line option processing for H(div) example using PETSc
 
 #include "../include/cl-options.h"
-#include "../include/problems.h"
-
-// Register problems to be available on the command line
-PetscErrorCode RegisterProblems_Hdiv(AppCtx app_ctx) {
-  app_ctx->problems = NULL;
-  PetscErrorCode   ierr;
-  PetscFunctionBeginUser;
-  // 1) darcy2d (Hdiv_DARCY2D is created in darcy2d.c)
-  ierr = PetscFunctionListAdd(&app_ctx->problems, "darcy2d",
-                              Hdiv_DARCY2D); CHKERRQ(ierr);
-  // 2) darcy3d (Hdiv_DARCY3D is created in dacry3d.c)
-  ierr = PetscFunctionListAdd(&app_ctx->problems, "darcy3d",
-                              Hdiv_DARCY3D); CHKERRQ(ierr);
-  // 3) darcy3d-prism
-
-  // 4) richard
-
-  PetscFunctionReturn(0);
-}
 
 // Process general command line options
 PetscErrorCode ProcessCommandLineOptions(MPI_Comm comm, AppCtx app_ctx) {
 
   PetscBool problem_flag = PETSC_FALSE;
-  PetscErrorCode ierr;
   PetscFunctionBeginUser;
 
   PetscOptionsBegin(comm, NULL, "H(div) examples in PETSc with libCEED", NULL);
 
-  ierr = PetscOptionsFList("-problem", "Problem to solve", NULL,
-                           app_ctx->problems,
-                           app_ctx->problem_name, app_ctx->problem_name, sizeof(app_ctx->problem_name),
-                           &problem_flag); CHKERRQ(ierr);
-
+  PetscCall( PetscOptionsFList("-problem", "Problem to solve", NULL,
+                               app_ctx->problems,
+                               app_ctx->problem_name, app_ctx->problem_name, sizeof(app_ctx->problem_name),
+                               &problem_flag) );
+  // Provide default problem if not specified
+  if (!problem_flag) {
+    const char *problem_name = "darcy2d";
+    strncpy(app_ctx->problem_name, problem_name, 16);
+  }
   app_ctx->degree = 1;
-  ierr = PetscOptionsInt("-degree", "Polynomial degree of finite elements",
-                         NULL, app_ctx->degree, &app_ctx->degree, NULL); CHKERRQ(ierr);
+  PetscCall( PetscOptionsInt("-degree", "Polynomial degree of finite elements",
+                             NULL, app_ctx->degree, &app_ctx->degree, NULL) );
 
   app_ctx->q_extra = 0;
-  ierr = PetscOptionsInt("-q_extra", "Number of extra quadrature points",
-                         NULL, app_ctx->q_extra, &app_ctx->q_extra, NULL); CHKERRQ(ierr);
+  PetscCall( PetscOptionsInt("-q_extra", "Number of extra quadrature points",
+                             NULL, app_ctx->q_extra, &app_ctx->q_extra, NULL) );
 
   // Neumann boundary conditions
   app_ctx->bc_traction_count = 16;
-  ierr = PetscOptionsIntArray("-bc_traction",
-                              "Face IDs to apply traction (Neumann) BC",
-                              NULL, app_ctx->bc_traction_faces,
-                              &app_ctx->bc_traction_count, NULL); CHKERRQ(ierr);
+  PetscCall( PetscOptionsIntArray("-bc_traction",
+                                  "Face IDs to apply traction (Neumann) BC",
+                                  NULL, app_ctx->bc_traction_faces,
+                                  &app_ctx->bc_traction_count, NULL) );
   // Set vector for each traction BC
   for (PetscInt i = 0; i < app_ctx->bc_traction_count; i++) {
     // Traction vector
@@ -77,19 +61,13 @@ PetscErrorCode ProcessCommandLineOptions(MPI_Comm comm, AppCtx app_ctx) {
              app_ctx->bc_traction_faces[i]);
     PetscInt max_n = 3;
     PetscBool set = false;
-    ierr = PetscOptionsScalarArray(option_name,
-                                   "Traction vector for constrained face", NULL,
-                                   app_ctx->bc_traction_vector[i], &max_n, &set);
-    CHKERRQ(ierr);
+    PetscCall( PetscOptionsScalarArray(option_name,
+                                       "Traction vector for constrained face", NULL,
+                                       app_ctx->bc_traction_vector[i], &max_n, &set) );
 
     if (!set)
       SETERRQ(PETSC_COMM_SELF, PETSC_ERR_SUP,
               "Traction vector must be set for all traction boundary conditions.");
-  }
-  // Provide default problem if not specified
-  if (!problem_flag) {
-    const char *problem_name = "darcy2d";
-    strncpy(app_ctx->problem_name, problem_name, 16);
   }
 
   PetscOptionsEnd();

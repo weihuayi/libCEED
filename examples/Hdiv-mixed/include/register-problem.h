@@ -1,8 +1,10 @@
-#ifndef problems_h
-#define problems_h
+#ifndef register_problems_h
+#define register_problems_h
 
 #include "../include/structs.h"
 
+// Register problems to be available on the command line
+PetscErrorCode RegisterProblems_Hdiv(AppCtx app_ctx);
 // -----------------------------------------------------------------------------
 // Set up problems function prototype
 // -----------------------------------------------------------------------------
@@ -16,4 +18,4 @@ PetscErrorCode Hdiv_DARCY3D(ProblemData *problem_data, void *ctx);
 
 // 4) richard
 
-#endif // problems_h
+#endif // register_problems_h
