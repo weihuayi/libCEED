@@ -120,7 +120,7 @@ PetscErrorCode CreateOperatorForDomain(Ceed ceed, DM dm, SimpleBC bc,
       CHKERRQ(ierr);
       if (jac_data_size_sur > 0) {
         // State-dependent data will be passed from residual to Jacobian. This will be collocated.
-        ierr = GetRestrictionForDomain(ceed, dm, height, domain_label, bc->outflows[i],
+        ierr = GetRestrictionForDomain(ceed, dm, height, domain_label, bc->inflows[i],
                                        Q_sur, jac_data_size_sur, NULL, NULL,
                                        &elem_restr_jd_i_sur);
         CHKERRQ(ierr);
