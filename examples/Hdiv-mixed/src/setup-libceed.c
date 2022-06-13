@@ -1,4 +1,5 @@
 #include "../include/setup-libceed.h"
+#include "../include/setup-boundary.h"
 #include "../include/petsc-macros.h"
 #include "../basis/Hdiv-quad.h"
 #include "../basis/Hdiv-hex.h"
@@ -20,6 +21,7 @@ PetscErrorCode CeedDataDestroy(CeedData ceed_data) {
   // Vectors
   CeedVectorDestroy(&ceed_data->x_ceed);
   CeedVectorDestroy(&ceed_data->y_ceed);
+  CeedVectorDestroy(&ceed_data->x_coord);
   // Restrictions
   CeedElemRestrictionDestroy(&ceed_data->elem_restr_x);
   CeedElemRestrictionDestroy(&ceed_data->elem_restr_u);
@@ -29,6 +31,7 @@ PetscErrorCode CeedDataDestroy(CeedData ceed_data) {
   CeedBasisDestroy(&ceed_data->basis_x);
   CeedBasisDestroy(&ceed_data->basis_u);
   CeedBasisDestroy(&ceed_data->basis_p);
+  CeedBasisDestroy(&ceed_data->basis_u_face);
   // QFunctions
   CeedQFunctionDestroy(&ceed_data->qf_residual);
   CeedQFunctionDestroy(&ceed_data->qf_jacobian);
@@ -148,7 +151,7 @@ PetscErrorCode CreateRestrictionFromPlexOriented(Ceed ceed, DM dm,
 // Set up libCEED on the fine grid for a given degree
 // -----------------------------------------------------------------------------
 PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
-                            ProblemData *problem_data,
+                            ProblemData problem_data,
                             PetscInt F_loc_size, CeedData ceed_data,
                             CeedVector force_ceed, CeedVector *target) {
   CeedInt       P = app_ctx->degree + 1;
@@ -159,9 +162,8 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   Vec           coords;
   PetscInt      c_start, c_end, num_elem;
   const PetscScalar *coordArray;
-  CeedVector    x_coord;
-  CeedQFunction qf_setup_rhs, qf_residual, qf_jacobian, qf_error;
-  CeedOperator  op_setup_rhs, op_residual, op_jacobian, op_error;
+  CeedQFunction qf_force, qf_residual, qf_jacobian, qf_error;
+  CeedOperator  op_force, op_residual, op_jacobian, op_error;
 
   PetscFunctionBeginUser;
   // ---------------------------------------------------------------------------
@@ -170,7 +172,7 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   dim = problem_data->dim;
   num_comp_x = dim;
   num_comp_u = 1;   // one vector dof
-  num_comp_p = 1;   // one vector dof
+  num_comp_p = 1;   // one scalar dof
   // Number of quadratures per element
   CeedInt       num_qpts = PetscPowInt(Q, dim);
   // Pressure and velocity dof per element
@@ -186,6 +188,10 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
     L2BasisP0(dim, Q, q_ref, q_weights, interp_p, problem_data->quadrature_mode);
     CeedBasisCreateH1(ceed, CEED_TOPOLOGY_QUAD, num_comp_p, 1, num_qpts, interp_p,
                       grad, q_ref,q_weights, &ceed_data->basis_p);
+    HdivBasisQuad(Q, q_ref, q_weights, interp_u, div,
+                  CEED_GAUSS_LOBATTO);
+    CeedBasisCreateHdiv(ceed, CEED_TOPOLOGY_QUAD, num_comp_u, P_u, num_qpts,
+                        interp_u, div, q_ref, q_weights, &ceed_data->basis_u_face);
   } else {
     HdivBasisHex(Q, q_ref, q_weights, interp_u, div, problem_data->quadrature_mode);
     CeedBasisCreateHdiv(ceed, CEED_TOPOLOGY_HEX, num_comp_u, P_u, num_qpts,
@@ -193,6 +199,9 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
     L2BasisP0(dim, Q, q_ref, q_weights, interp_p, problem_data->quadrature_mode);
     CeedBasisCreateH1(ceed, CEED_TOPOLOGY_HEX, num_comp_p, 1, num_qpts, interp_p,
                       grad, q_ref,q_weights, &ceed_data->basis_p);
+    HdivBasisHex(Q, q_ref, q_weights, interp_u, div, CEED_GAUSS_LOBATTO);
+    CeedBasisCreateHdiv(ceed, CEED_TOPOLOGY_HEX, num_comp_u, P_u, num_qpts,
+                        interp_u, div, q_ref, q_weights, &ceed_data->basis_u_face);
   }
 
   CeedBasisCreateTensorH1Lagrange(ceed, dim, num_comp_x, 2, Q,
@@ -224,9 +233,11 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   // ---------------------------------------------------------------------------
   PetscCall( DMGetCoordinatesLocal(dm, &coords) );
   PetscCall( VecGetArrayRead(coords, &coordArray) );
+  CeedVectorCreate(ceed, F_loc_size, &ceed_data->x_coord);
 
-  CeedElemRestrictionCreateVector(ceed_data->elem_restr_x, &x_coord, NULL);
-  CeedVectorSetArray(x_coord, CEED_MEM_HOST, CEED_COPY_VALUES,
+  CeedElemRestrictionCreateVector(ceed_data->elem_restr_x, &ceed_data->x_coord,
+                                  NULL);
+  CeedVectorSetArray(ceed_data->x_coord, CEED_MEM_HOST, CEED_COPY_VALUES,
                      (PetscScalar *)coordArray);
   PetscCall( VecRestoreArrayRead(coords, &coordArray) );
 
@@ -235,32 +246,32 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   // ---------------------------------------------------------------------------
   CeedVectorCreate(ceed, num_elem*num_qpts*(dim+1), target);
   // Create the q-function that sets up the RHS and true solution
-  CeedQFunctionCreateInterior(ceed, 1, problem_data->setup_rhs,
-                              problem_data->setup_rhs_loc, &qf_setup_rhs);
-  CeedQFunctionAddInput(qf_setup_rhs, "x", num_comp_x, CEED_EVAL_INTERP);
-  CeedQFunctionAddInput(qf_setup_rhs, "weight", 1, CEED_EVAL_WEIGHT);
-  CeedQFunctionAddInput(qf_setup_rhs, "dx", dim*dim, CEED_EVAL_GRAD);
-  CeedQFunctionAddOutput(qf_setup_rhs, "rhs_u", dim, CEED_EVAL_INTERP);
-  CeedQFunctionAddOutput(qf_setup_rhs, "rhs_p", 1, CEED_EVAL_INTERP);
-  CeedQFunctionAddOutput(qf_setup_rhs, "true_soln", dim+1, CEED_EVAL_NONE);
+  CeedQFunctionCreateInterior(ceed, 1, problem_data->force,
+                              problem_data->force_loc, &qf_force);
+  CeedQFunctionAddInput(qf_force, "x", num_comp_x, CEED_EVAL_INTERP);
+  CeedQFunctionAddInput(qf_force, "weight", 1, CEED_EVAL_WEIGHT);
+  CeedQFunctionAddInput(qf_force, "dx", dim*dim, CEED_EVAL_GRAD);
+  CeedQFunctionAddOutput(qf_force, "rhs_u", dim, CEED_EVAL_INTERP);
+  CeedQFunctionAddOutput(qf_force, "rhs_p", 1, CEED_EVAL_INTERP);
+  CeedQFunctionAddOutput(qf_force, "true_soln", dim+1, CEED_EVAL_NONE);
   // Create the operator that builds the RHS and true solution
-  CeedOperatorCreate(ceed, qf_setup_rhs, CEED_QFUNCTION_NONE, CEED_QFUNCTION_NONE,
-                     &op_setup_rhs);
-  CeedOperatorSetField(op_setup_rhs, "x", ceed_data->elem_restr_x,
+  CeedOperatorCreate(ceed, qf_force, CEED_QFUNCTION_NONE, CEED_QFUNCTION_NONE,
+                     &op_force);
+  CeedOperatorSetField(op_force, "x", ceed_data->elem_restr_x,
                        ceed_data->basis_x, CEED_VECTOR_ACTIVE);
-  CeedOperatorSetField(op_setup_rhs, "weight", CEED_ELEMRESTRICTION_NONE,
+  CeedOperatorSetField(op_force, "weight", CEED_ELEMRESTRICTION_NONE,
                        ceed_data->basis_x, CEED_VECTOR_NONE);
-  CeedOperatorSetField(op_setup_rhs, "dx", ceed_data->elem_restr_x,
+  CeedOperatorSetField(op_force, "dx", ceed_data->elem_restr_x,
                        ceed_data->basis_x, CEED_VECTOR_ACTIVE);
-  CeedOperatorSetField(op_setup_rhs, "rhs_u", ceed_data->elem_restr_u,
+  CeedOperatorSetField(op_force, "rhs_u", ceed_data->elem_restr_u,
                        ceed_data->basis_u, CEED_VECTOR_ACTIVE);
-  CeedOperatorSetField(op_setup_rhs, "rhs_p", ceed_data->elem_restr_p,
+  CeedOperatorSetField(op_force, "rhs_p", ceed_data->elem_restr_p,
                        ceed_data->basis_p, CEED_VECTOR_ACTIVE);
-  CeedOperatorSetField(op_setup_rhs, "true_soln", ceed_data->elem_restr_U_i,
+  CeedOperatorSetField(op_force, "true_soln", ceed_data->elem_restr_U_i,
                        CEED_BASIS_COLLOCATED, *target);
   // Setup RHS and true solution
-  CeedOperatorApply(op_setup_rhs, x_coord, force_ceed, CEED_REQUEST_IMMEDIATE);
-
+  CeedOperatorApply(op_force, ceed_data->x_coord, force_ceed,
+                    CEED_REQUEST_IMMEDIATE);
   // ---------------------------------------------------------------------------
   // Persistent libCEED vectors
   // ---------------------------------------------------------------------------
@@ -289,7 +300,7 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   CeedOperatorSetField(op_residual, "weight", CEED_ELEMRESTRICTION_NONE,
                        ceed_data->basis_x, CEED_VECTOR_NONE);
   CeedOperatorSetField(op_residual, "dx", ceed_data->elem_restr_x,
-                       ceed_data->basis_x, x_coord);
+                       ceed_data->basis_x, ceed_data->x_coord);
   CeedOperatorSetField(op_residual, "u", ceed_data->elem_restr_u,
                        ceed_data->basis_u, CEED_VECTOR_ACTIVE);
   CeedOperatorSetField(op_residual, "div_u", ceed_data->elem_restr_u,
@@ -305,6 +316,11 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   // -- Save libCEED data to apply operator in matops.c
   ceed_data->qf_residual = qf_residual;
   ceed_data->op_residual = op_residual;
+
+  // ---------------------------------------------------------------------------
+  // Add Pressure boundary condition. See setup-boundary.c
+  // ---------------------------------------------------------------------------
+  //DMAddBoundariesPressure(ceed, ceed_data, app_ctx, problem_data, dm);
 
   // Local jacobian evaluator
   // ---------------------------------------------------------------------------
@@ -327,7 +343,7 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   CeedOperatorSetField(op_jacobian, "weight", CEED_ELEMRESTRICTION_NONE,
                        ceed_data->basis_x, CEED_VECTOR_NONE);
   CeedOperatorSetField(op_jacobian, "dx", ceed_data->elem_restr_x,
-                       ceed_data->basis_x, x_coord);
+                       ceed_data->basis_x, ceed_data->x_coord);
   CeedOperatorSetField(op_jacobian, "du", ceed_data->elem_restr_u,
                        ceed_data->basis_u, CEED_VECTOR_ACTIVE);
   CeedOperatorSetField(op_jacobian, "div_du", ceed_data->elem_restr_u,
@@ -348,8 +364,8 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   // Setup Error Qfunction
   // ---------------------------------------------------------------------------
   // Create the q-function that sets up the error
-  CeedQFunctionCreateInterior(ceed, 1, problem_data->setup_error,
-                              problem_data->setup_error_loc, &qf_error);
+  CeedQFunctionCreateInterior(ceed, 1, problem_data->error,
+                              problem_data->error_loc, &qf_error);
   CeedQFunctionAddInput(qf_error, "weight", 1, CEED_EVAL_WEIGHT);
   CeedQFunctionAddInput(qf_error, "dx", dim*dim, CEED_EVAL_GRAD);
   CeedQFunctionAddInput(qf_error, "u", dim, CEED_EVAL_INTERP);
@@ -362,7 +378,7 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   CeedOperatorSetField(op_error, "weight", CEED_ELEMRESTRICTION_NONE,
                        ceed_data->basis_x, CEED_VECTOR_NONE);
   CeedOperatorSetField(op_error, "dx", ceed_data->elem_restr_x,
-                       ceed_data->basis_x, x_coord);
+                       ceed_data->basis_x, ceed_data->x_coord);
   CeedOperatorSetField(op_error, "u", ceed_data->elem_restr_u,
                        ceed_data->basis_u, CEED_VECTOR_ACTIVE);
   CeedOperatorSetField(op_error, "p", ceed_data->elem_restr_p,
@@ -374,76 +390,9 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   // -- Save libCEED data to apply operator in matops.c
   ceed_data->qf_error = qf_error;
   ceed_data->op_error = op_error;
-
-  // ---------------------------------------------------------------------------
-  // Dirichlet boundary conditions, if needed
-  // ---------------------------------------------------------------------------
-  //PetscCall( DMAddBoundariesDirichlet(dm) );
-  // ---------------------------------------------------------------------------
-  // Traction boundary conditions, if needed
-  // ---------------------------------------------------------------------------
-
-  // --- Setup
-  PetscCall( DMGetLabel(dm, "Face Sets", &domain_label) );
-
-  // -- Basis
-  CeedInt loc_num_elem_face, num_qpts_face,
-          q_data_size_face = problem_data->q_data_size_face;
-  CeedBasis basis_x_face;
-  height = 1;
-  CeedBasisCreateTensorH1Lagrange(ceed, dim - height, num_comp_x, 2, Q,
-                                  problem_data->quadrature_mode, &basis_x_face);
-  // ---- CEED Restriction
-  CeedElemRestriction elem_restr_x_face, elem_restr_qd_i_face;
-  num_qpts_face = CeedIntPow(Q, dim - height);
-  PetscCall( CreateRestrictionFromPlex(ceed, dm_coord, height, domain_label, 4,
-                                       &elem_restr_x_face) );
-
-  CeedElemRestrictionGetNumElements(elem_restr_x_face, &loc_num_elem_face);
-  CeedElemRestrictionCreateStrided(ceed, loc_num_elem_face, num_qpts_face,
-                                   q_data_size_face,
-                                   q_data_size_face*loc_num_elem_face*num_qpts_face,
-                                   CEED_STRIDES_BACKEND, &elem_restr_qd_i_face);
-  //printf("%d\n", loc_num_elem_face);
-  //CeedElemRestrictionView(elem_restr_x_face, stdout);
-  // ---- CEED Vector
-  CeedVector          q_data_face;
-  CeedVectorCreate(ceed, q_data_size_face*loc_num_elem_face*num_qpts_face,
-                   &q_data_face);
-  // -- QFunction
-  CeedQFunction qf_setup_face_geo;
-  CeedQFunctionCreateInterior(ceed, 1, problem_data->setup_face_geo,
-                              problem_data->setup_face_geo_loc, &qf_setup_face_geo);
-  CeedQFunctionAddInput(qf_setup_face_geo, "dx", num_comp_x*(dim-height),
-                        CEED_EVAL_GRAD);
-  CeedQFunctionAddInput(qf_setup_face_geo, "weight", 1, CEED_EVAL_WEIGHT);
-  CeedQFunctionAddOutput(qf_setup_face_geo, "qdata face", q_data_size_face,
-                         CEED_EVAL_NONE);
-  // -- Operator
-  CeedOperator op_setup_face_geo;
-  CeedOperatorCreate(ceed, qf_setup_face_geo, CEED_QFUNCTION_NONE,
-                     CEED_QFUNCTION_NONE, &op_setup_face_geo);
-  CeedOperatorSetField(op_setup_face_geo, "dx", elem_restr_x_face,
-                       basis_x_face, CEED_VECTOR_ACTIVE);
-  CeedOperatorSetField(op_setup_face_geo, "weight", CEED_ELEMRESTRICTION_NONE,
-                       basis_x_face, CEED_VECTOR_NONE);
-  CeedOperatorSetField(op_setup_face_geo, "qdata face", elem_restr_qd_i_face,
-                       CEED_BASIS_COLLOCATED, CEED_VECTOR_ACTIVE);
-  // -- Compute the quadrature data
-  CeedOperatorApply(op_setup_face_geo, x_coord, q_data_face,
-                    CEED_REQUEST_IMMEDIATE);
-
   // -- Cleanup
-  CeedBasisDestroy(&basis_x_face);
-  CeedVectorDestroy(&q_data_face);
-  CeedElemRestrictionDestroy(&elem_restr_x_face);
-  CeedElemRestrictionDestroy(&elem_restr_qd_i_face);
-  CeedQFunctionDestroy(&qf_setup_face_geo);
-  CeedOperatorDestroy(&op_setup_face_geo);
-
-  CeedQFunctionDestroy(&qf_setup_rhs);
-  CeedOperatorDestroy(&op_setup_rhs);
-  CeedVectorDestroy(&x_coord);
+  CeedQFunctionDestroy(&qf_force);
+  CeedOperatorDestroy(&op_force);
 
   PetscFunctionReturn(0);
 };

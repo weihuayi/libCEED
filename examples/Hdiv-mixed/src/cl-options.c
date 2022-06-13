@@ -20,12 +20,13 @@
 #include "../include/cl-options.h"
 
 // Process general command line options
-PetscErrorCode ProcessCommandLineOptions(MPI_Comm comm, AppCtx app_ctx) {
+PetscErrorCode ProcessCommandLineOptions(AppCtx app_ctx) {
 
   PetscBool problem_flag = PETSC_FALSE;
   PetscFunctionBeginUser;
 
-  PetscOptionsBegin(comm, NULL, "H(div) examples in PETSc with libCEED", NULL);
+  PetscOptionsBegin(app_ctx->comm, NULL, "H(div) examples in PETSc with libCEED",
+                    NULL);
 
   PetscCall( PetscOptionsFList("-problem", "Problem to solve", NULL,
                                app_ctx->problems,
@@ -43,32 +44,11 @@ PetscErrorCode ProcessCommandLineOptions(MPI_Comm comm, AppCtx app_ctx) {
   app_ctx->q_extra = 0;
   PetscCall( PetscOptionsInt("-q_extra", "Number of extra quadrature points",
                              NULL, app_ctx->q_extra, &app_ctx->q_extra, NULL) );
-
-  // Neumann boundary conditions
-  app_ctx->bc_traction_count = 16;
-  PetscCall( PetscOptionsIntArray("-bc_traction",
-                                  "Face IDs to apply traction (Neumann) BC",
-                                  NULL, app_ctx->bc_traction_faces,
-                                  &app_ctx->bc_traction_count, NULL) );
-  // Set vector for each traction BC
-  for (PetscInt i = 0; i < app_ctx->bc_traction_count; i++) {
-    // Traction vector
-    char option_name[25];
-    for (PetscInt j = 0; j < 3; j++)
-      app_ctx->bc_traction_vector[i][j] = 0.;
-
-    snprintf(option_name, sizeof option_name, "-bc_traction_%d",
-             app_ctx->bc_traction_faces[i]);
-    PetscInt max_n = 3;
-    PetscBool set = false;
-    PetscCall( PetscOptionsScalarArray(option_name,
-                                       "Traction vector for constrained face", NULL,
-                                       app_ctx->bc_traction_vector[i], &max_n, &set) );
-
-    if (!set)
-      SETERRQ(PETSC_COMM_SELF, PETSC_ERR_SUP,
-              "Traction vector must be set for all traction boundary conditions.");
-  }
+  app_ctx->bc_pressure_count = 16;
+  // we can set one face by: -bc_faces 1 OR multiple faces by :-bc_faces 1,2,3
+  PetscCall( PetscOptionsIntArray("-bc_faces",
+                                  "Face IDs to apply pressure BC",
+                                  NULL, app_ctx->bc_faces, &app_ctx->bc_pressure_count, NULL) );
 
   PetscOptionsEnd();
 

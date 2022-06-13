@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 // Set-up DM
 // ---------------------------------------------------------------------------
-PetscErrorCode CreateDistributedDM(MPI_Comm comm, ProblemData *problem_data,
+PetscErrorCode CreateDistributedDM(MPI_Comm comm, ProblemData problem_data,
                                    DM *dm) {
   PetscSection   sec;
   PetscInt       dofs_per_face;

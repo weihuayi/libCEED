@@ -1,9 +1,9 @@
 #ifndef cloptions_h
 #define cloptions_h
 
-#include "../include/structs.h"
+#include "structs.h"
 
 // Process general command line options
-PetscErrorCode ProcessCommandLineOptions(MPI_Comm comm, AppCtx app_ctx);
+PetscErrorCode ProcessCommandLineOptions(AppCtx app_ctx);
 
 #endif // cloptions_h

@@ -1,7 +1,7 @@
 #ifndef setuplibceed_h
 #define setuplibceed_h
 
-#include "../include/structs.h"
+#include "structs.h"
 
 // Convert PETSc MemType to libCEED MemType
 CeedMemType MemTypeP2C(PetscMemType mtype);
@@ -18,7 +18,7 @@ PetscErrorCode CreateRestrictionFromPlexOriented(Ceed ceed, DM dm, CeedInt P,
     CeedElemRestriction *elem_restr_oriented, CeedElemRestriction *elem_restr);
 // Set up libCEED for a given degree
 PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
-                            ProblemData *problem_data,
+                            ProblemData problem_data,
                             PetscInt rhs_loc_size, CeedData ceed_data,
                             CeedVector rhs_ceed, CeedVector *target);
 #endif // setuplibceed_h

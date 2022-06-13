@@ -23,9 +23,11 @@
 //
 // Build with: make
 // Run with:
-//     ./main -pc_type svd -problem darcy2d -dm_plex_dim 2 -dm_plex_box_faces 4,4
-//     ./main -pc_type svd -problem darcy3d -dm_plex_dim 3 -dm_plex_box_faces 4,4,4
-//     ./main -pc_type svd -problem darcy3d -dm_plex_filename /path to the mesh file
+//   ./main -pc_type svd -problem darcy2d -dm_plex_dim 2 -dm_plex_box_faces 4,4
+//   ./main -pc_type svd -problem darcy3d -dm_plex_dim 3 -dm_plex_box_faces 4,4,4
+//   ./main -pc_type svd -problem darcy3d -dm_plex_filename /path to the mesh file
+//   ./main -pc_type svd -problem darcy2d -dm_plex_dim 2 -dm_plex_box_faces 4,4 -bc_pressure 1
+//   ./main -pc_type svd -problem darcy2d -dm_plex_dim 2 -dm_plex_box_faces 4,4 -bc_pressure 1,2,3,4
 const char help[] = "Solve H(div)-mixed problem using PETSc and libCEED\n";
 
 #include "main.h"
@@ -42,7 +44,7 @@ int main(int argc, char **argv) {
   AppCtx app_ctx;
   PetscCall( PetscCalloc1(1, &app_ctx) );
 
-  ProblemData *problem_data = NULL;
+  ProblemData problem_data = NULL;
   PetscCall( PetscCalloc1(1, &problem_data) );
 
   CeedData ceed_data;
@@ -62,13 +64,14 @@ int main(int argc, char **argv) {
 
   // -- Process general command line options
   MPI_Comm comm = PETSC_COMM_WORLD;
-  PetscCall( ProcessCommandLineOptions(comm, app_ctx) );
+  app_ctx->comm = comm;
+  PetscCall( ProcessCommandLineOptions(app_ctx) );
 
   // ---------------------------------------------------------------------------
   // Choose the problem from the list of registered problems
   // ---------------------------------------------------------------------------
   {
-    PetscErrorCode (*p)(ProblemData *, void *);
+    PetscErrorCode (*p)(ProblemData, void *);
     PetscCall( PetscFunctionListFind(app_ctx->problems, app_ctx->problem_name,
                                      &p) );
     if (!p) SETERRQ(PETSC_COMM_SELF, 1, "Problem '%s' not found",
@@ -107,12 +110,12 @@ int main(int argc, char **argv) {
 
 
   // ---------------------------------------------------------------------------
-  // Create local RHS vector
+  // Create local Force vector
   // ---------------------------------------------------------------------------
   Vec F_loc;
   PetscInt F_loc_size;
   CeedScalar *f;
-  CeedVector force_ceed, target;
+  CeedVector force_ceed, target, bc_pressure;
   PetscMemType force_mem_type;
   PetscCall( DMCreateLocalVector(dm, &F_loc) );
   // Local size for libCEED
@@ -121,7 +124,9 @@ int main(int argc, char **argv) {
   PetscCall( VecGetArrayAndMemType(F_loc, &f, &force_mem_type) );
   CeedVectorCreate(ceed, F_loc_size, &force_ceed);
   CeedVectorSetArray(force_ceed, MemTypeP2C(force_mem_type), CEED_USE_POINTER, f);
-
+  CeedVectorCreate(ceed, F_loc_size, &bc_pressure);
+  CeedVectorSetArray(bc_pressure, MemTypeP2C(force_mem_type), CEED_USE_POINTER,
+                     f);
   // ---------------------------------------------------------------------------
   // Setup libCEED - Compute local F and true solution (target)
   // ---------------------------------------------------------------------------
@@ -129,7 +134,8 @@ int main(int argc, char **argv) {
   PetscCall( SetupLibceed(dm, ceed, app_ctx, problem_data,
                           F_loc_size, ceed_data, force_ceed, &target) );
   //CeedVectorView(force_ceed, "%12.8f", stdout);
-
+  PetscCall( DMAddBoundariesPressure(ceed, ceed_data, app_ctx, problem_data, dm,
+                                     bc_pressure) );
   // ---------------------------------------------------------------------------
   // Create global F
   // ---------------------------------------------------------------------------
@@ -147,9 +153,10 @@ int main(int argc, char **argv) {
   SNES snes;
   KSP ksp;
   Vec U;
+  op_apply_ctx->comm = comm;
   PetscCall( SNESCreate(comm, &snes) );
   PetscCall( SNESGetKSP(snes, &ksp) );
-  PetscCall( SetupCommonCtx(comm, dm, ceed, ceed_data, op_apply_ctx) );
+  PetscCall( SetupCommonCtx(dm, ceed, ceed_data, op_apply_ctx) );
   PetscCall( PDESolver(ceed_data, vec_type, snes, ksp, F, &U, op_apply_ctx) );
   //VecView(U, PETSC_VIEWER_STDOUT_WORLD);
 
@@ -163,7 +170,7 @@ int main(int argc, char **argv) {
   // ---------------------------------------------------------------------------
   // Print output results
   // ---------------------------------------------------------------------------
-  PetscCall( PrintOutput(comm, ceed, mem_type_backend,
+  PetscCall( PrintOutput(ceed, mem_type_backend,
                          snes, ksp, U, l2_error_u, l2_error_p, app_ctx) );
 
   // ---------------------------------------------------------------------------
@@ -201,6 +208,7 @@ int main(int argc, char **argv) {
 
   // Free libCEED objects
   CeedVectorDestroy(&force_ceed);
+  CeedVectorDestroy(&bc_pressure);
   CeedVectorDestroy(&target);
   PetscCall( CeedDataDestroy(ceed_data) );
   CeedDestroy(&ceed);

@@ -1,3 +1,5 @@
+#ifndef Hdiv_hex_h
+#define Hdiv_hex_h
 // Copyright (c) 2017-2018, Lawrence Livermore National Security, LLC.
 // Produced at the Lawrence Livermore National Laboratory. LLNL-CODE-734707.
 // All Rights reserved. See files LICENSE and NOTICE for details.
@@ -159,4 +161,4 @@ static void HdivBasisHex(CeedInt Q, CeedScalar *q_ref, CeedScalar *q_weights,
   }
 }
 
-
+#endif // Hdiv_hex_h

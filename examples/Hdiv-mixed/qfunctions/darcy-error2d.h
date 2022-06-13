@@ -25,9 +25,9 @@
 // -----------------------------------------------------------------------------
 // Compuet error
 // -----------------------------------------------------------------------------
-CEED_QFUNCTION(SetupDarcyError2D)(void *ctx, const CeedInt Q,
-                                  const CeedScalar *const *in,
-                                  CeedScalar *const *out) {
+CEED_QFUNCTION(DarcyError2D)(void *ctx, const CeedInt Q,
+                             const CeedScalar *const *in,
+                             CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
   const CeedScalar (*w) = in[0], 

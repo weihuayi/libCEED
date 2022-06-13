@@ -17,15 +17,14 @@
 /// @file
 /// Utility functions for setting up Darcy problem in 3D
 
-#include "../include/setup-libceed.h"
 #include "../include/register-problem.h"
-#include "../qfunctions/darcy-rhs3d.h"
+#include "../qfunctions/darcy-force3d.h"
 #include "../qfunctions/darcy-mass3d.h"
 #include "../qfunctions/darcy-error3d.h"
-#include "../qfunctions/face-geo3d.h"
+#include "../qfunctions/pressure-boundary3d.h"
 
 // Hdiv_DARCY3D is registered in cl-option.c
-PetscErrorCode Hdiv_DARCY3D(ProblemData *problem_data, void *ctx) {
+PetscErrorCode Hdiv_DARCY3D(ProblemData problem_data, void *ctx) {
   Physics           phys = *(Physics *)ctx;
   MPI_Comm          comm = PETSC_COMM_WORLD;
   PetscFunctionBeginUser;
@@ -39,16 +38,16 @@ PetscErrorCode Hdiv_DARCY3D(ProblemData *problem_data, void *ctx) {
   problem_data->elem_node               = 8;
   problem_data->q_data_size_face        = 4;
   problem_data->quadrature_mode         = CEED_GAUSS;
-  problem_data->setup_rhs               = SetupDarcyRhs3D;
-  problem_data->setup_rhs_loc           = SetupDarcyRhs3D_loc;
-  problem_data->residual                = SetupDarcyMass3D;
-  problem_data->residual_loc            = SetupDarcyMass3D_loc;
-  problem_data->jacobian                = SetupJacobianDarcyMass3D;
-  problem_data->jacobian_loc            = SetupJacobianDarcyMass3D_loc;
-  problem_data->setup_error             = SetupDarcyError3D;
-  problem_data->setup_error_loc         = SetupDarcyError3D_loc;
-  problem_data->setup_face_geo          = SetupFaceGeo3D;
-  problem_data->setup_face_geo_loc      = SetupFaceGeo3D_loc;
+  problem_data->force                   = DarcyForce3D;
+  problem_data->force_loc               = DarcyForce3D_loc;
+  problem_data->residual                = DarcyMass3D;
+  problem_data->residual_loc            = DarcyMass3D_loc;
+  problem_data->jacobian                = JacobianDarcyMass3D;
+  problem_data->jacobian_loc            = JacobianDarcyMass3D_loc;
+  problem_data->error                   = DarcyError3D;
+  problem_data->error_loc               = DarcyError3D_loc;
+  problem_data->bc_pressure             = BCPressure3D;
+  problem_data->bc_pressure_loc         = BCPressure3D_loc;
   // ------------------------------------------------------
   //              Command line Options
   // ------------------------------------------------------

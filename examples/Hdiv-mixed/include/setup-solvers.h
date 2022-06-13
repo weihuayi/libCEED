@@ -6,7 +6,7 @@
 
 #include "structs.h"
 
-PetscErrorCode SetupCommonCtx(MPI_Comm comm, DM dm, Ceed ceed,
+PetscErrorCode SetupCommonCtx(DM dm, Ceed ceed,
                               CeedData ceed_data,
                               OperatorApplyContext op_apply_ctx);
 PetscErrorCode SetupJacobianOperatorCtx(CeedData ceed_data,
@@ -24,7 +24,7 @@ PetscErrorCode PDESolver(CeedData ceed_data, VecType vec_type, SNES snes,
 PetscErrorCode ComputeL2Error(CeedData ceed_data, Vec U, CeedVector target,
                               CeedScalar *l2_error_u, CeedScalar *l2_error_p,
                               OperatorApplyContext op_apply_ctx);
-PetscErrorCode PrintOutput(MPI_Comm comm, Ceed ceed,
+PetscErrorCode PrintOutput(Ceed ceed,
                            CeedMemType mem_type_backend,
                            SNES snes, KSP ksp,
                            Vec U, CeedScalar l2_error_u,

@@ -5,12 +5,11 @@
 // -----------------------------------------------------------------------------
 // Setup operator context data
 // -----------------------------------------------------------------------------
-PetscErrorCode SetupCommonCtx(MPI_Comm comm, DM dm, Ceed ceed,
+PetscErrorCode SetupCommonCtx(DM dm, Ceed ceed,
                               CeedData ceed_data,
                               OperatorApplyContext op_apply_ctx) {
   PetscFunctionBeginUser;
 
-  op_apply_ctx->comm = comm;
   op_apply_ctx->dm = dm;
   PetscCall( DMCreateLocalVector(dm, &op_apply_ctx->X_loc) );
   PetscCall( VecDuplicate(op_apply_ctx->X_loc, &op_apply_ctx->Y_loc) );
@@ -73,10 +72,9 @@ PetscErrorCode SNESFormResidual(SNES snes, Vec X, Vec Y, void *ctx) {
   PetscFunctionBeginUser;
 
   // Use computed BCs
-  //PetscCall( VecZeroEntries(op_apply_ctx->X_loc) );
-  //PetscCall( DMPlexInsertBoundaryValues(op_apply_ctx->dm, PETSC_TRUE,
-  //                                      op_apply_ctx->X_loc,
-  //                                      1.0, NULL, NULL, NULL) );
+  PetscCall( DMPlexInsertBoundaryValues(op_apply_ctx->dm, PETSC_TRUE,
+                                        op_apply_ctx->X_loc,
+                                        1.0, NULL, NULL, NULL) );
 
   // libCEED for local action of residual evaluator
   PetscCall( ApplyLocalCeedOp(X, Y, op_apply_ctx) );
@@ -254,7 +252,7 @@ PetscErrorCode ComputeL2Error(CeedData ceed_data, Vec X, CeedVector target,
 // -----------------------------------------------------------------------------
 // This function print the output
 // -----------------------------------------------------------------------------
-PetscErrorCode PrintOutput(MPI_Comm comm, Ceed ceed,
+PetscErrorCode PrintOutput(Ceed ceed,
                            CeedMemType mem_type_backend,
                            SNES snes, KSP ksp,
                            Vec U, CeedScalar l2_error_u,
@@ -267,8 +265,8 @@ PetscErrorCode PrintOutput(MPI_Comm comm, Ceed ceed,
   char hostname[PETSC_MAX_PATH_LEN];
   PetscCall( PetscGetHostName(hostname, sizeof hostname) );
   PetscInt comm_size;
-  PetscCall( MPI_Comm_size(comm, &comm_size) );
-  PetscCall( PetscPrintf(comm,
+  PetscCall( MPI_Comm_size(app_ctx->comm, &comm_size) );
+  PetscCall( PetscPrintf(app_ctx->comm,
                          "\n-- Mixed H(div) Example - libCEED + PETSc --\n"
                          "  MPI:\n"
                          "    Hostname                           : %s\n"
@@ -280,7 +278,7 @@ PetscErrorCode PrintOutput(MPI_Comm comm, Ceed ceed,
 
   VecType vecType;
   PetscCall( VecGetType(U, &vecType) );
-  PetscCall( PetscPrintf(comm,
+  PetscCall( PetscPrintf(app_ctx->comm,
                          "  PETSc:\n"
                          "    PETSc Vec Type                     : %s\n",
                          vecType) );
@@ -288,7 +286,7 @@ PetscErrorCode PrintOutput(MPI_Comm comm, Ceed ceed,
   PetscInt       U_l_size, U_g_size;
   PetscCall( VecGetSize(U, &U_g_size) );
   PetscCall( VecGetLocalSize(U, &U_l_size) );
-  PetscCall( PetscPrintf(comm,
+  PetscCall( PetscPrintf(app_ctx->comm,
                          "  Problem:\n"
                          "    Problem Name                       : %s\n"
                          "    Global nodes (u + p)               : %" PetscInt_FMT "\n"
@@ -305,7 +303,7 @@ PetscErrorCode PrintOutput(MPI_Comm comm, Ceed ceed,
   PetscCall( SNESGetType(snes, &snes_type) );
   PetscCall( SNESGetConvergedReason(snes, &snes_reason) );
   PetscCall( SNESGetFunctionNorm(snes, &snes_rnorm) );
-  PetscCall( PetscPrintf(comm,
+  PetscCall( PetscPrintf(app_ctx->comm,
                          "  SNES:\n"
                          "    SNES Type                          : %s\n"
                          "    SNES Convergence                   : %s\n"
@@ -328,7 +326,7 @@ PetscErrorCode PrintOutput(MPI_Comm comm, Ceed ceed,
   PetscCall( KSPGetConvergedReason(ksp, &ksp_reason) );
   PetscCall( KSPGetIterationNumber(ksp, &ksp_its) );
   PetscCall( KSPGetResidualNorm(ksp, &ksp_rnorm) );
-  PetscCall( PetscPrintf(comm,
+  PetscCall( PetscPrintf(app_ctx->comm,
                          "  KSP:\n"
                          "    KSP Type                           : %s\n"
                          "    PC Type                            : %s\n"
@@ -338,7 +336,7 @@ PetscErrorCode PrintOutput(MPI_Comm comm, Ceed ceed,
                          ksp_type, pc_type, KSPConvergedReasons[ksp_reason], ksp_its,
                          (double)ksp_rnorm ) );
 
-  PetscCall( PetscPrintf(comm,
+  PetscCall( PetscPrintf(app_ctx->comm,
                          "  L2 Error (MMS):\n"
                          "    L2 error of u and p                : %e, %e\n",
                          (double)l2_error_u,

@@ -1,3 +1,5 @@
+#ifndef Hdiv_quad_h
+#define Hdiv_quad_h
 // Copyright (c) 2017-2018, Lawrence Livermore National Security, LLC.
 // Produced at the Lawrence Livermore National Laboratory. LLNL-CODE-734707.
 // All Rights reserved. See files LICENSE and NOTICE for details.
@@ -84,4 +86,4 @@ static void HdivBasisQuad(CeedInt Q, CeedScalar *q_ref, CeedScalar *q_weights,
   }
 }
 
-
+#endif // Hdiv_quad_h

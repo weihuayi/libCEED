@@ -24,10 +24,12 @@
 
 // -----------------------------------------------------------------------------
 // Strong form:
-//  u       = -\grad(p)
-//  \div(u) = f
+//  u       = -\grad(p)      on \Omega
+//  \div(u) = f              on \Omega
+//  p = p0                   on \Gamma_D
+//  u.n = g                  on \Gamma_N
 // Weak form: Find (u,p) \in VxQ (V=H(div), Q=L^2) on \Omega
-//  (u, v) - (p, \div(v)) = -<p, v\cdot n>
+//  (v, u) - (\div(v), p) = -<v, p0 n>_{\Gamma_D}
 // -(q, \div(u))          = -(q, f)
 // This QFunction setup the mixed form of the above equation
 // Inputs:
@@ -48,9 +50,12 @@
 // Note we need to apply Piola map on the basis_u, which is J*u/detJ
 // So (v,u) = \int (v^T * u detJ*w) ==> \int (v^T J^T*J*u*w/detJ)
 // -----------------------------------------------------------------------------
-CEED_QFUNCTION(SetupDarcyMass2D)(void *ctx, CeedInt Q,
-                                 const CeedScalar *const *in,
-                                 CeedScalar *const *out) {
+// -----------------------------------------------------------------------------
+// Residual evaluation for Darcy problem
+// -----------------------------------------------------------------------------
+CEED_QFUNCTION(DarcyMass2D)(void *ctx, CeedInt Q,
+                            const CeedScalar *const *in,
+                            CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
   const CeedScalar (*w) = in[0],
@@ -102,9 +107,9 @@ CEED_QFUNCTION(SetupDarcyMass2D)(void *ctx, CeedInt Q,
 // -----------------------------------------------------------------------------
 // Jacobian evaluation for Darcy problem
 // -----------------------------------------------------------------------------
-CEED_QFUNCTION(SetupJacobianDarcyMass2D)(void *ctx, CeedInt Q,
-    const CeedScalar *const *in,
-    CeedScalar *const *out) {
+CEED_QFUNCTION(JacobianDarcyMass2D)(void *ctx, CeedInt Q,
+                                    const CeedScalar *const *in,
+                                    CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
   const CeedScalar (*w) = in[0],

@@ -5,12 +5,12 @@
 #include <petscdmplex.h>
 #include <petscsys.h>
 #include <ceed.h>
-#include "../include/structs.h"
+#include "structs.h"
 
 // ---------------------------------------------------------------------------
 // Set-up DM
 // ---------------------------------------------------------------------------
-PetscErrorCode CreateDistributedDM(MPI_Comm comm, ProblemData *problem_data,
+PetscErrorCode CreateDistributedDM(MPI_Comm comm, ProblemData problem_data,
                                    DM *dm);
 
 #endif // setupdm_h
