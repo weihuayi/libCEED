@@ -307,8 +307,24 @@ PetscErrorCode FormIJacobian_NS(TS ts, PetscReal t, Vec Q, Vec Q_dot,
     if (!J_pre_is_shell) {
       PetscCount ncoo;
       PetscInt *rows, *cols;
-      PetscCall(CeedOperatorLinearAssembleSymbolic(user->op_ijacobian, &ncoo, &rows,
-                &cols));
+      if (user->app_ctx->pmat_pbdiagonal) {
+        CeedSize l_size;
+        CeedOperatorGetActiveVectorLengths(user->op_ijacobian, &l_size, NULL);
+        ncoo = l_size * 5;
+        rows = malloc(ncoo*sizeof(rows[0]));
+        cols = malloc(ncoo*sizeof(cols[0]));
+        for (PetscCount n=0; n<l_size/5; n++) {
+          for (PetscInt i=0; i<5; i++) {
+            for (PetscInt j=0; j<5; j++) {
+              rows[(n*5+i)*5+j] = n * 5 + i;
+              cols[(n*5+i)*5+j] = n * 5 + j;
+            }
+          }
+        }
+      } else {
+        PetscCall(CeedOperatorLinearAssembleSymbolic(user->op_ijacobian, &ncoo, &rows,
+                                                     &cols));
+      }
       PetscCall(MatSetPreallocationCOOLocal(J_pre, ncoo, rows, cols));
       free(rows);
       free(cols);
@@ -323,7 +339,11 @@ PetscErrorCode FormIJacobian_NS(TS ts, PetscReal t, Vec Q, Vec Q_dot,
     PetscCall(MatGetType(J_pre, &mat_type));
     if (strstr(mat_type, "kokkos") || strstr(mat_type, "cusparse"))
       mem_type = CEED_MEM_DEVICE;
-    CeedOperatorLinearAssemble(user->op_ijacobian, user->coo_values);
+    if (user->app_ctx->pmat_pbdiagonal) {
+      CeedOperatorLinearAssemblePointBlockDiagonal(user->op_ijacobian, user->coo_values, CEED_REQUEST_IMMEDIATE);
+    } else {
+      CeedOperatorLinearAssemble(user->op_ijacobian, user->coo_values);
+    }
     CeedVectorGetArrayRead(user->coo_values, mem_type, &values);
     PetscCall(MatSetValuesCOO(J_pre, values, INSERT_VALUES));
     CeedVectorRestoreArrayRead(user->coo_values, &values);
@@ -432,6 +452,15 @@ PetscErrorCode TSSolve_NS(DM dm, User user, AppCtx app_ctx, Physics phys,
     }
     if (user->op_ijacobian) {
       ierr = DMTSSetIJacobian(dm, FormIJacobian_NS, &user); CHKERRQ(ierr);
+      if (app_ctx->amat_shell) {
+        Mat Pmat,Amat;
+        ierr = DMCreateMatrix(dm, &Pmat); CHKERRQ(ierr);
+        ierr = DMSetMatType(dm, MATSHELL); CHKERRQ(ierr);
+        ierr = DMCreateMatrix(dm, &Amat); CHKERRQ(ierr);
+        ierr = TSSetIJacobian(*ts, Amat, Pmat, NULL, NULL); CHKERRQ(ierr);
+        ierr = MatDestroy(&Amat); CHKERRQ(ierr);
+        ierr = MatDestroy(&Pmat); CHKERRQ(ierr);
+      }
     }
   } else {
     if (!user->op_rhs) SETERRQ(comm, PETSC_ERR_ARG_NULL,

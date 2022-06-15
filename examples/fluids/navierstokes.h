@@ -110,6 +110,9 @@ struct AppCtx_private {
   char              ceed_resource[PETSC_MAX_PATH_LEN]; // libCEED backend
   PetscInt          degree;
   PetscInt          q_extra;
+  // Solver arguments
+  PetscBool         amat_shell;
+  PetscBool         pmat_pbdiagonal;
   // Post-processing arguments
   PetscInt          output_freq;
   PetscInt          viz_refine;

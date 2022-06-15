@@ -98,6 +98,11 @@ PetscErrorCode ProcessCommandLineOptions(MPI_Comm comm, AppCtx app_ctx,
   ierr = PetscOptionsInt("-q_extra", "Number of extra quadrature points",
                          NULL, app_ctx->q_extra, &app_ctx->q_extra, NULL); CHKERRQ(ierr);
 
+  ierr = PetscOptionsBool("-amat_shell", "Use a shell matrix for Amat, separate from Pmat",
+                         NULL, app_ctx->amat_shell, &app_ctx->amat_shell, NULL); CHKERRQ(ierr);
+  ierr = PetscOptionsBool("-pmat_pbdiagonal", "Assemble only point-block diagonal for Pmat",
+                         NULL, app_ctx->pmat_pbdiagonal, &app_ctx->pmat_pbdiagonal, NULL); CHKERRQ(ierr);
+
   ierr = PetscStrncpy(app_ctx->output_dir, ".", 2); CHKERRQ(ierr);
   ierr = PetscOptionsString("-output_dir", "Output directory",
                             NULL, app_ctx->output_dir, app_ctx->output_dir,
