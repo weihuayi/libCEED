@@ -93,6 +93,7 @@ PetscErrorCode RHS_NS(TS ts, PetscReal t, Vec Q, Vec G, void *user_data) {
 
   // Update time dependent data
   if (user->time != t) {
+    ierr = VecZeroEntries(Q_loc); CHKERRQ(ierr);
     ierr = DMPlexInsertBoundaryValues(user->dm, PETSC_TRUE, Q_loc, t,
                                       NULL, NULL, NULL); CHKERRQ(ierr);
     if (user->phys->solution_time_label) {
@@ -160,6 +161,7 @@ PetscErrorCode IFunction_NS(TS ts, PetscReal t, Vec Q, Vec Q_dot, Vec G,
 
   // Update time dependent data
   if (user->time != t) {
+    ierr = VecZeroEntries(Q_loc); CHKERRQ(ierr);
     ierr = DMPlexInsertBoundaryValues(user->dm, PETSC_TRUE, Q_loc, t,
                                       NULL, NULL, NULL); CHKERRQ(ierr);
     if (user->phys->solution_time_label) {
