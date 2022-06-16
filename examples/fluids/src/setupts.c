@@ -224,8 +224,8 @@ static PetscErrorCode MatMult_NS_IJacobian(Mat J, Vec Q, Vec G) {
   PetscErrorCode    ierr;
   PetscFunctionBeginUser;
   ierr = MatShellGetContext(J, &user); CHKERRQ(ierr);
-  Vec               Q_loc = user->Q_dot_loc,
-                    G_loc; // Note - Q_dot_loc has zero BCs
+  Vec               Q_loc = user->Q_dot_loc, // Note - Q_dot_loc has zero BCs
+                    G_loc;
 
   // Get local vectors
   ierr = DMGetLocalVector(user->dm, &G_loc); CHKERRQ(ierr);
