@@ -37,6 +37,18 @@ typedef struct {
   StatePrimitive Y;
 } State;
 
+CEED_QFUNCTION_HELPER void UnpackState_U(StateConservative s, CeedScalar U[5]) {
+  U[0] = s.density;
+  for (int i=0; i<3; i++) U[i+1] = s.momentum[i];
+  U[4] = s.E_total;
+}
+
+CEED_QFUNCTION_HELPER void UnpackState_Y(StatePrimitive s, CeedScalar Y[5]) {
+  Y[0] = s.pressure;
+  for (int i=0; i<3; i++) Y[i+1] = s.velocity[i];
+  Y[4] = s.temperature;
+}
+
 CEED_QFUNCTION_HELPER StatePrimitive StatePrimitiveFromConservative(
   NewtonianIdealGasContext gas, StateConservative U, const CeedScalar x[3]) {
   StatePrimitive Y;
@@ -107,8 +119,8 @@ CEED_QFUNCTION_HELPER void FluxInviscid(NewtonianIdealGasContext gas, State s,
   }
 }
 
-CEED_QFUNCTION_HELPER void FluxInviscid_fwd(NewtonianIdealGasContext gas,
-    State s, State ds, StateConservative dFlux[3]) {
+CEED_QFUNCTION_HELPER void FluxInviscid_fwd(State s, State ds,
+    StateConservative dFlux[3]) {
   for (int i=0; i<3; i++) {
     dFlux[i].density = ds.U.momentum[i];
     for (int j=0; j<3; j++)
@@ -218,7 +230,7 @@ CEED_QFUNCTION_HELPER void computeFluxJacobian_NSp(CeedScalar dF[3][5][5],
 
   for (CeedInt i=0; i<3; i++) { // Jacobian matrices for 3 directions
     for (CeedInt j=0; j<3; j++) { // j counts F^{m_j}
-//        [row][col] of A_i
+      //   [row][col] of A_i
       dF[i][j+1][0] = drdP * u[i] * u[j] + ((i==j) ? 1. : 0.); // F^{{m_j} wrt p
       for (CeedInt k=0; k<3; k++) { // k counts the wrt vel_k
         dF[i][0][k+1]   =  ((i==k) ? rho  : 0.);   // F^c wrt u_k
@@ -600,7 +612,6 @@ CEED_QFUNCTION(IFunction_Newtonian)(void *ctx, CeedInt Q,
   const CeedScalar cp     = context->cp;
   const CeedScalar *g     = context->g;
   const CeedScalar dt     = context->dt;
-  const CeedScalar gamma  = cp / cv;
   const CeedScalar Rd     = cp-cv;
 
   CeedPragmaSIMD
@@ -669,23 +680,16 @@ CEED_QFUNCTION(IFunction_Newtonian)(void *ctx, CeedInt Q,
     for (CeedInt j=0; j<5; j++)
       v[j][i] = wdetJ * (q_dot[j][i] - body_force[j]);
 
-    // jacob_F_conv[3][5][5] = dF(convective)/dq at each direction
-    CeedScalar jacob_F_conv[3][5][5] = {0};
-    computeFluxJacobian_NS(jacob_F_conv, s.U.density, s.Y.velocity, s.U.E_total,
-                           gamma, g, x_i);
-    CeedScalar grad_U[5][3];
-    for (CeedInt j=0; j<3; j++) {
-      grad_U[0][j] = grad_s[j].U.density;
-      for (CeedInt k=0; k<3; k++) grad_U[k+1][j] = grad_s[j].U.momentum[k];
-      grad_U[4][j] = grad_s[j].U.E_total;
-    }
-
-    // strong_conv = dF/dq * dq/dx    (Strong convection)
+    // strong_conv = dF/dx    (Strong convection)
     CeedScalar strong_conv[5] = {0};
-    for (CeedInt j=0; j<3; j++)
+    CeedScalar grad_F[3][5];
+    for (CeedInt j=0; j<3; j++) {
+      StateConservative dF[3];
+      FluxInviscid_fwd(s, grad_s[j], dF);
+      UnpackState_U(dF[j], grad_F[j]);
       for (CeedInt k=0; k<5; k++)
-        for (CeedInt l=0; l<5; l++)
-          strong_conv[k] += jacob_F_conv[j][k][l] * grad_U[l][j];
+        strong_conv[k] += grad_F[j][k];
+    }
 
     // Strong residual
     CeedScalar strong_res[5];
@@ -711,8 +715,7 @@ CEED_QFUNCTION(IFunction_Newtonian)(void *ctx, CeedInt Q,
                                   tau_strong_conv, tau_strong_conv_conservative);
       for (CeedInt j=0; j<3; j++)
         for (CeedInt k=0; k<5; k++)
-          for (CeedInt l=0; l<5; l++)
-            stab[k][j] += jacob_F_conv[j][k][l] * tau_strong_conv_conservative[l];
+          stab[k][j] += grad_F[j][k] * tau_strong_conv_conservative[k];
 
       for (CeedInt j=0; j<5; j++)
         for (CeedInt k=0; k<3; k++)
@@ -739,8 +742,7 @@ CEED_QFUNCTION(IFunction_Newtonian)(void *ctx, CeedInt Q,
                                   tau_strong_res, tau_strong_res_conservative);
       for (CeedInt j=0; j<3; j++)
         for (CeedInt k=0; k<5; k++)
-          for (CeedInt l=0; l<5; l++)
-            stab[k][j] += jacob_F_conv[j][k][l] * tau_strong_res_conservative[l];
+          stab[k][j] += grad_F[j][k] * tau_strong_res_conservative[k];
 
       for (CeedInt j=0; j<5; j++)
         for (CeedInt k=0; k<3; k++)
@@ -820,9 +822,10 @@ CEED_QFUNCTION(IJacobian_Newtonian)(void *ctx, CeedInt Q,
     State grad_ds[3];
     for (int j=0; j<3; j++) {
       CeedScalar dUj[5];
-      for (int k=0; k<5; k++) dUj[k] = Grad_dq[0][k][i] * dXdx[0][j]
-                                         + Grad_dq[1][k][i] * dXdx[1][j]
-                                         + Grad_dq[2][k][i] * dXdx[2][j];
+      for (int k=0; k<5; k++)
+        dUj[k] = Grad_dq[0][k][i] * dXdx[0][j] +
+                 Grad_dq[1][k][i] * dXdx[1][j] +
+                 Grad_dq[2][k][i] * dXdx[2][j];
       grad_ds[j] = StateFromU_fwd(context, s, dUj, x_i, dx0);
     }
 
@@ -834,7 +837,7 @@ CEED_QFUNCTION(IJacobian_Newtonian)(void *ctx, CeedInt Q,
     ViscousEnergyFlux_fwd(context, s.Y, ds.Y, grad_ds, stress, dstress, dFe);
 
     StateConservative dF_inviscid[3];
-    FluxInviscid_fwd(context, s, ds, dF_inviscid);
+    FluxInviscid_fwd(s, ds, dF_inviscid);
 
     // Total flux
     CeedScalar dFlux[5][3];
