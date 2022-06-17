@@ -181,8 +181,6 @@ PetscErrorCode CreateOperatorForDomain(Ceed ceed, DM dm, SimpleBC bc,
                              CEED_BASIS_COLLOCATED, jac_data_sur);
         CeedOperatorSetField(op_apply_inflow_jacobian, "v", elem_restr_q_sur,
                              ceed_data->basis_q_sur, CEED_VECTOR_ACTIVE);
-        CeedOperatorSetField(op_apply_inflow_jacobian, "dummy", elem_restr_q_sur,
-                             ceed_data->basis_q_sur, CEED_VECTOR_ACTIVE);
       }
 
       // ----- Apply CEED operator for Setup
@@ -281,8 +279,6 @@ PetscErrorCode CreateOperatorForDomain(Ceed ceed, DM dm, SimpleBC bc,
                              elem_restr_jd_i_sur,
                              CEED_BASIS_COLLOCATED, jac_data_sur);
         CeedOperatorSetField(op_apply_outflow_jacobian, "v", elem_restr_q_sur,
-                             ceed_data->basis_q_sur, CEED_VECTOR_ACTIVE);
-        CeedOperatorSetField(op_apply_outflow_jacobian, "dummy", elem_restr_q_sur,
                              ceed_data->basis_q_sur, CEED_VECTOR_ACTIVE);
       }
 
@@ -650,8 +646,6 @@ PetscErrorCode SetupLibceed(Ceed ceed, CeedData ceed_data, DM dm, User user,
                           jac_data_size_sur, CEED_EVAL_NONE);
     CeedQFunctionAddOutput(ceed_data->qf_apply_inflow_jacobian, "v", num_comp_q,
                            CEED_EVAL_INTERP);
-    CeedQFunctionAddOutput(ceed_data->qf_apply_inflow_jacobian, "dummy",
-                           num_comp_q*dim_sur, CEED_EVAL_GRAD);
   }
 
   // -- Creat QFunction for outflow boundaries
@@ -696,8 +690,6 @@ PetscErrorCode SetupLibceed(Ceed ceed, CeedData ceed_data, DM dm, User user,
                           jac_data_size_sur, CEED_EVAL_NONE);
     CeedQFunctionAddOutput(ceed_data->qf_apply_outflow_jacobian, "v", num_comp_q,
                            CEED_EVAL_INTERP);
-    CeedQFunctionAddOutput(ceed_data->qf_apply_outflow_jacobian, "dummy",
-                           num_comp_q*dim_sur, CEED_EVAL_GRAD);
   }
 
   // *****************************************************************************
