@@ -840,8 +840,10 @@ int CeedQFunctionContextSetDataDestroy(CeedQFunctionContext ctx,
 int CeedQFunctionContextDestroy(CeedQFunctionContext *ctx) {
   int ierr;
 
-  if (!*ctx || --(*ctx)->ref_count > 0)
+  if (!*ctx || --(*ctx)->ref_count > 0) {
+    // *ctx = NULL; // TODO
     return CEED_ERROR_SUCCESS;
+  }
 
   if ((*ctx) && ((*ctx)->state % 2) == 1)
     // LCOV_EXCL_START
