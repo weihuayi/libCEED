@@ -20,6 +20,7 @@ PetscErrorCode CreateDM(MPI_Comm comm, ProblemData *problem,
   // Create DMPLEX
   ierr = DMCreate(comm, dm); CHKERRQ(ierr);
   ierr = DMSetType(*dm, DMPLEX); CHKERRQ(ierr);
+  ierr = DMSetMatrixPreallocateSkip(*dm, PETSC_TRUE); CHKERRQ(ierr);
   ierr = DMSetMatType(*dm, mat_type); CHKERRQ(ierr);
   ierr = DMSetVecType(*dm, vec_type); CHKERRQ(ierr);
 
