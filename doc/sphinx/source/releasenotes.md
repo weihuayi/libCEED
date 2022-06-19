@@ -13,6 +13,11 @@ On this page we provide a summary of the main API changes, new features and exam
 ### Bugfix
 
 - Fix storing of indices for `CeedElemRestriction` on the host with GPU backends.
+- Fix `CeedElemRestriction` sizing for {c:func}`CeedOperatorAssemblePointBlockDiagonal`.
+
+### Examples
+
+- Added various performance enhancements for {ref}`example-petsc-navier-stokes`
 
 (v0-10-1)=
 
