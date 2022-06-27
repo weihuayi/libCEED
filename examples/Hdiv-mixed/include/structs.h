@@ -18,63 +18,49 @@ struct AppCtx_ {
   // Problem type arguments
   PetscFunctionList problems;
   char              problem_name[PETSC_MAX_PATH_LEN];
-
 };
 
-// libCEED data struct
-typedef struct CeedData_ *CeedData;
-struct CeedData_ {
-  CeedBasis            basis_x, basis_u, basis_p, basis_u_face;
-  CeedElemRestriction  elem_restr_x, elem_restr_u, elem_restr_U_i,
-                       elem_restr_p;
-  CeedQFunction        qf_residual, qf_jacobian, qf_error;
-  CeedOperator         op_residual, op_jacobian, op_error;
-  CeedVector           x_ceed, y_ceed, x_coord;
-};
+// 2) richard
+// We have 3 experiment parameters as described in Table 1:P1, P2, P3
+// Matthew Farthing, Christopher Kees, Cass Miller (2003)
+// https://www.sciencedirect.com/science/article/pii/S0309170802001872
 
-// 1) darcy2d
-#ifndef PHYSICS_DARCY2D_STRUCT
-#define PHYSICS_DARCY2D_STRUCT
-typedef struct DARCY2DContext_ *DARCY2DContext;
-struct DARCY2DContext_ {
-  CeedScalar kappa;
-};
-#endif
-
-// 2) darcy3d
-#ifndef PHYSICS_DARCY3D_STRUCT
-#define PHYSICS_DARCY3D_STRUCT
-typedef struct DARCY3DContext_ *DARCY3DContext;
-struct DARCY3DContext_ {
-  CeedScalar kappa;
+#ifndef PHYSICS_RICHARDP2_STRUCT
+#define PHYSICS_RICHARDP2_STRUCT
+typedef struct RICHARDP2Context_ *RICHARDP2Context;
+struct RICHARDP2Context_ {
+  CeedScalar K_star;
+  CeedScalar theta_s;
+  CeedScalar theta_r;
+  CeedScalar alpha_v;
+  CeedScalar n_v;
+  CeedScalar m_v;
+  CeedScalar m_r;
+  CeedScalar rho_0;
+  CeedScalar beta;
 };
 #endif
 
-// 3) richard2d
-#ifndef PHYSICS_RICHARD2D_STRUCT
-#define PHYSICS_RICHARD2D_STRUCT
-typedef struct RICHARD2DContext_ *RICHARD2DContext;
-struct RICHARD2DContext_ {
-  CeedScalar kappa;
-};
-#endif
-
-// 4) richard3d
-#ifndef PHYSICS_RICHARD3D_STRUCT
-#define PHYSICS_RICHARD3D_STRUCT
-typedef struct RICHARD3DContext_ *RICHARD3DContext;
-struct RICHARD3DContext_ {
-  CeedScalar kappa;
+#ifndef PHYSICS_RICHARDP3_STRUCT
+#define PHYSICS_RICHARDP3_STRUCT
+typedef struct RICHARDP3Context_ *RICHARDP3Context;
+struct RICHARDP3Context_ {
+  CeedScalar K_star;
+  CeedScalar theta_s;
+  CeedScalar theta_r;
+  CeedScalar alpha_star_v;
+  CeedScalar n_v;
+  CeedScalar m_v;
+  CeedScalar rho_0;
+  CeedScalar beta;
 };
 #endif
 
 // Struct that contains all enums and structs used for the physics of all problems
 typedef struct Physics_ *Physics;
 struct Physics_ {
-  DARCY2DContext            darcy2d_ctx;
-  DARCY3DContext            darcy3d_ctx;
-  RICHARD2DContext          richard2d_ctx;
-  RICHARD3DContext          richard3d_ctx;
+  RICHARDP2Context        richard_p2_ctx;
+  RICHARDP3Context        richard_p3_ctx;
 };
 
 // PETSc operator contexts
@@ -88,6 +74,18 @@ struct OperatorApplyContext_ {
   Ceed            ceed;
 };
 
+// libCEED data struct
+typedef struct CeedData_ *CeedData;
+struct CeedData_ {
+  CeedBasis            basis_x, basis_u, basis_p, basis_u_face;
+  CeedElemRestriction  elem_restr_x, elem_restr_u, elem_restr_U_i,
+                       elem_restr_p;
+  CeedQFunction        qf_residual, qf_jacobian, qf_error;
+  CeedOperator         op_residual, op_jacobian, op_error;
+  CeedVector           x_ceed, y_ceed, x_coord;
+  OperatorApplyContext ctx_residual, ctx_jacobian, ctx_error;
+};
+
 // Problem specific data
 typedef struct ProblemData_ *ProblemData;
 struct ProblemData_ {
@@ -97,7 +95,7 @@ struct ProblemData_ {
         *error_loc, *setup_true_loc, *bc_pressure_loc;
   CeedQuadMode      quadrature_mode;
   CeedInt           elem_node, dim, q_data_size_face;
-
+  CeedQFunctionContext qfunction_context;
 };
 
 #endif // structs_h

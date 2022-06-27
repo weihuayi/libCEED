@@ -21,10 +21,7 @@
 #define DARCY_FORCE3D_H
 
 #include <math.h>
-
-#ifndef M_PI
-#define M_PI    3.14159265358979323846
-#endif
+#include "utils.h"
 
 // -----------------------------------------------------------------------------
 // Compute determinant of 3x3 matrix
@@ -61,6 +58,13 @@ CEED_QFUNCTION_HELPER CeedScalar ComputeDetMat(const CeedScalar A[3][3]) {
 //   force_u     : which is 0.0 for this problem (-<v, p0 n> is in pressure-boundary qfunction)
 //   force_p     : -(q, f) = -\int( q * f * w*detJ)dx
 // -----------------------------------------------------------------------------
+#ifndef DARCY_CTX
+#define DARCY_CTX
+typedef struct DARCYContext_ *DARCYContext;
+struct DARCYContext_ {
+  CeedScalar kappa;
+};
+#endif
 CEED_QFUNCTION(DarcyForce3D)(void *ctx, const CeedInt Q,
                              const CeedScalar *const *in,
                              CeedScalar *const *out) {
@@ -72,7 +76,9 @@ CEED_QFUNCTION(DarcyForce3D)(void *ctx, const CeedInt Q,
   // Outputs
   CeedScalar (*rhs_u) = out[0], (*rhs_p) = out[1],
              (*true_soln) = out[2];
-
+  // Context
+  DARCYContext  context = (DARCYContext)ctx;
+  const CeedScalar    kappa   = context->kappa;
   // Quadrature Point Loop
   CeedPragmaSIMD
   for (CeedInt i=0; i<Q; i++) {
@@ -81,14 +87,20 @@ CEED_QFUNCTION(DarcyForce3D)(void *ctx, const CeedInt Q,
     const CeedScalar J[3][3] = {{dxdX[0][0][i], dxdX[1][0][i], dxdX[2][0][i]},
                                 {dxdX[0][1][i], dxdX[1][1][i], dxdX[2][1][i]},
                                 {dxdX[0][2][i], dxdX[1][2][i], dxdX[2][2][i]}};
-    const CeedScalar detJ = ComputeDetMat(J);             
-    // *INDENT-ON*
-    CeedScalar pe = sin(M_PI*x) * sin(M_PI*y) * sin(M_PI*z) + M_PI*x*y*z;
-    CeedScalar ue[3] = {-M_PI*cos(M_PI*x) *sin(M_PI*y) *sin(M_PI*z) - M_PI *y*z,
-                        -M_PI*sin(M_PI*x) *cos(M_PI*y) *sin(M_PI*z) - M_PI *x*z,
-                        -M_PI*sin(M_PI*x) *sin(M_PI*y) *cos(M_PI*z) - M_PI *x *y
-                       };
-    CeedScalar f = 3*M_PI*M_PI*sin(M_PI*x)*sin(M_PI*y)*sin(M_PI*z);
+    const CeedScalar det_J = MatDet3x3(J);             
+    CeedScalar pe = sin(PI_DOUBLE*x) * sin(PI_DOUBLE*y) * sin(PI_DOUBLE*z);
+    CeedScalar grad_pe[3] = {PI_DOUBLE*cos(PI_DOUBLE*x) *sin(PI_DOUBLE*y) *sin(PI_DOUBLE*z),
+                             PI_DOUBLE*sin(PI_DOUBLE*x) *cos(PI_DOUBLE*y) *sin(PI_DOUBLE*z),
+                             PI_DOUBLE*sin(PI_DOUBLE*x) *sin(PI_DOUBLE*y) *cos(PI_DOUBLE*z)
+                            };
+    CeedScalar K[3][3] = {{kappa, 0., 0.},
+      {0., kappa, 0.},
+      {0., 0., kappa}
+    };
+    CeedScalar ue[3];
+    AlphaMatVecMult3x3(-1., K, grad_pe, ue);
+    CeedScalar f = 3*PI_DOUBLE*PI_DOUBLE*sin(PI_DOUBLE*x)*sin(PI_DOUBLE*y)*sin(
+                     PI_DOUBLE*z);
 
     // 1st eq: component 1
     rhs_u[i+0*Q] = 0.;
@@ -97,7 +109,7 @@ CEED_QFUNCTION(DarcyForce3D)(void *ctx, const CeedInt Q,
     // 1st eq: component 2
     rhs_u[i+2*Q] = 0.;
     // 2nd eq
-    rhs_p[i] = -f*w[i]*detJ;
+    rhs_p[i] = -f*w[i]*det_J;
     // True solution Ue=[p,u]
     true_soln[i+0*Q] = pe;
     true_soln[i+1*Q] = ue[0];

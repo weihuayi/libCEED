@@ -248,6 +248,7 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   // Create the q-function that sets up the RHS and true solution
   CeedQFunctionCreateInterior(ceed, 1, problem_data->force,
                               problem_data->force_loc, &qf_force);
+  CeedQFunctionSetContext(qf_force, problem_data->qfunction_context);
   CeedQFunctionAddInput(qf_force, "x", num_comp_x, CEED_EVAL_INTERP);
   CeedQFunctionAddInput(qf_force, "weight", 1, CEED_EVAL_WEIGHT);
   CeedQFunctionAddInput(qf_force, "dx", dim*dim, CEED_EVAL_GRAD);
@@ -286,14 +287,18 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   // -- QFunction
   CeedQFunctionCreateInterior(ceed, 1, problem_data->residual,
                               problem_data->residual_loc, &qf_residual);
+  CeedQFunctionSetContext(qf_residual, problem_data->qfunction_context);
+  //CeedQFunctionContextDestroy(&problem_data->qfunction_context);
   CeedQFunctionAddInput(qf_residual, "weight", 1, CEED_EVAL_WEIGHT);
   CeedQFunctionAddInput(qf_residual, "dx", dim*dim, CEED_EVAL_GRAD);
   CeedQFunctionAddInput(qf_residual, "u", dim, CEED_EVAL_INTERP);
   CeedQFunctionAddInput(qf_residual, "div_u", 1, CEED_EVAL_DIV);
   CeedQFunctionAddInput(qf_residual, "p", 1, CEED_EVAL_INTERP);
+  //CeedQFunctionAddInput(qf_residual, "x", num_comp_x, CEED_EVAL_INTERP);
   CeedQFunctionAddOutput(qf_residual, "v", dim, CEED_EVAL_INTERP);
   CeedQFunctionAddOutput(qf_residual, "div_v", 1, CEED_EVAL_DIV);
   CeedQFunctionAddOutput(qf_residual, "q", 1, CEED_EVAL_INTERP);
+
   // -- Operator
   CeedOperatorCreate(ceed, qf_residual, CEED_QFUNCTION_NONE, CEED_QFUNCTION_NONE,
                      &op_residual);
@@ -307,6 +312,8 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
                        ceed_data->basis_u, CEED_VECTOR_ACTIVE);
   CeedOperatorSetField(op_residual, "p", ceed_data->elem_restr_p,
                        ceed_data->basis_p, CEED_VECTOR_ACTIVE);
+  //CeedOperatorSetField(op_residual, "x", ceed_data->elem_restr_x,
+  //                     ceed_data->basis_x, CEED_VECTOR_ACTIVE);
   CeedOperatorSetField(op_residual, "v", ceed_data->elem_restr_u,
                        ceed_data->basis_u, CEED_VECTOR_ACTIVE);
   CeedOperatorSetField(op_residual, "div_v", ceed_data->elem_restr_u,
@@ -327,13 +334,17 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
   // Create the QFunction and Operator that computes the jacobian of the PDE.
   // ---------------------------------------------------------------------------
   // -- QFunction
-  CeedQFunctionCreateInterior(ceed, 1, problem_data->residual,
-                              problem_data->residual_loc, &qf_jacobian);
+  CeedQFunctionCreateInterior(ceed, 1, problem_data->jacobian,
+                              problem_data->jacobian_loc, &qf_jacobian);
+  CeedQFunctionSetContext(qf_jacobian, problem_data->qfunction_context);
   CeedQFunctionAddInput(qf_jacobian, "weight", 1, CEED_EVAL_WEIGHT);
   CeedQFunctionAddInput(qf_jacobian, "dx", dim*dim, CEED_EVAL_GRAD);
   CeedQFunctionAddInput(qf_jacobian, "du", dim, CEED_EVAL_INTERP);
   CeedQFunctionAddInput(qf_jacobian, "div_du", 1, CEED_EVAL_DIV);
   CeedQFunctionAddInput(qf_jacobian, "dp", 1, CEED_EVAL_INTERP);
+  //CeedQFunctionAddInput(qf_jacobian, "x", num_comp_x, CEED_EVAL_INTERP);
+  //CeedQFunctionAddInput(qf_jacobian, "u", dim, CEED_EVAL_INTERP);
+  //CeedQFunctionAddInput(qf_jacobian, "p", 1, CEED_EVAL_INTERP);
   CeedQFunctionAddOutput(qf_jacobian, "dv", dim, CEED_EVAL_INTERP);
   CeedQFunctionAddOutput(qf_jacobian, "div_dv", 1, CEED_EVAL_DIV);
   CeedQFunctionAddOutput(qf_jacobian, "dq", 1, CEED_EVAL_INTERP);
@@ -350,6 +361,12 @@ PetscErrorCode SetupLibceed(DM dm, Ceed ceed, AppCtx app_ctx,
                        ceed_data->basis_u, CEED_VECTOR_ACTIVE);
   CeedOperatorSetField(op_jacobian, "dp", ceed_data->elem_restr_p,
                        ceed_data->basis_p, CEED_VECTOR_ACTIVE);
+  //CeedOperatorSetField(op_jacobian, "x", ceed_data->elem_restr_x,
+  //                     ceed_data->basis_x, CEED_VECTOR_ACTIVE);
+  //CeedOperatorSetField(op_jacobian, "u", ceed_data->elem_restr_u,
+  //                     ceed_data->basis_u, CEED_VECTOR_ACTIVE);
+  //CeedOperatorSetField(op_jacobian, "p", ceed_data->elem_restr_p,
+  //                     ceed_data->basis_p, CEED_VECTOR_ACTIVE);
   CeedOperatorSetField(op_jacobian, "dv", ceed_data->elem_restr_u,
                        ceed_data->basis_u, CEED_VECTOR_ACTIVE);
   CeedOperatorSetField(op_jacobian, "div_dv", ceed_data->elem_restr_u,

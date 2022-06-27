@@ -35,3 +35,11 @@ PetscErrorCode RegisterProblems_Hdiv(AppCtx app_ctx) {
 
   PetscFunctionReturn(0);
 }
+
+
+// Free a plain data context that was allocated using PETSc; returning libCEED error codes
+int FreeContextPetsc(void *data) {
+  if (PetscFree(data)) return CeedError(NULL, CEED_ERROR_ACCESS,
+                                          "PetscFree failed");
+  return CEED_ERROR_SUCCESS;
+}

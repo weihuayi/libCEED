@@ -39,6 +39,29 @@ int main(int argc, char **argv) {
   PetscCall( PetscInitialize(&argc, &argv, NULL, help) );
 
   // ---------------------------------------------------------------------------
+  // Initialize libCEED
+  // ---------------------------------------------------------------------------
+  // -- Initialize backend
+  Ceed ceed;
+  CeedInit("/cpu/self/ref/serial", &ceed);
+  CeedMemType mem_type_backend;
+  CeedGetPreferredMemType(ceed, &mem_type_backend);
+
+  VecType        vec_type = NULL;
+  switch (mem_type_backend) {
+  case CEED_MEM_HOST: vec_type = VECSTANDARD; break;
+  case CEED_MEM_DEVICE: {
+    const char *resolved;
+    CeedGetResource(ceed, &resolved);
+    if (strstr(resolved, "/gpu/cuda")) vec_type = VECCUDA;
+    else if (strstr(resolved, "/gpu/hip/occa"))
+      vec_type = VECSTANDARD; // https://github.com/CEED/libCEED/issues/678
+    else if (strstr(resolved, "/gpu/hip")) vec_type = VECHIP;
+    else vec_type = VECSTANDARD;
+  }
+  }
+
+  // ---------------------------------------------------------------------------
   // Create structs
   // ---------------------------------------------------------------------------
   AppCtx app_ctx;
@@ -71,43 +94,24 @@ int main(int argc, char **argv) {
   // Choose the problem from the list of registered problems
   // ---------------------------------------------------------------------------
   {
-    PetscErrorCode (*p)(ProblemData, void *);
+    PetscErrorCode (*p)(Ceed, ProblemData, void *);
     PetscCall( PetscFunctionListFind(app_ctx->problems, app_ctx->problem_name,
                                      &p) );
     if (!p) SETERRQ(PETSC_COMM_SELF, 1, "Problem '%s' not found",
                       app_ctx->problem_name);
-    PetscCall( (*p)(problem_data, &phys_ctx) );
+    PetscCall( (*p)(ceed, problem_data, &app_ctx) );
   }
 
   // ---------------------------------------------------------------------------
-  // Initialize libCEED
+  // Create DM
   // ---------------------------------------------------------------------------
-  // -- Initialize backend
-  Ceed ceed;
-  CeedInit("/cpu/self/ref/serial", &ceed);
-  CeedMemType mem_type_backend;
-  CeedGetPreferredMemType(ceed, &mem_type_backend);
-  // ---------------------------------------------------------------------------
-  // Setup DM
-  // ---------------------------------------------------------------------------
-  // PETSc objects
   DM             dm;
-  VecType        vec_type = NULL;
-  PetscCall( CreateDistributedDM(comm, problem_data, &dm) );
-  switch (mem_type_backend) {
-  case CEED_MEM_HOST: vec_type = VECSTANDARD; break;
-  case CEED_MEM_DEVICE: {
-    const char *resolved;
-    CeedGetResource(ceed, &resolved);
-    if (strstr(resolved, "/gpu/cuda")) vec_type = VECCUDA;
-    else if (strstr(resolved, "/gpu/hip/occa"))
-      vec_type = VECSTANDARD; // https://github.com/CEED/libCEED/issues/678
-    else if (strstr(resolved, "/gpu/hip")) vec_type = VECHIP;
-    else vec_type = VECSTANDARD;
-  }
-  }
-  PetscCall( DMSetVecType(dm, vec_type) );
+  PetscCall( CreateDM(comm, vec_type, &dm) );
 
+  // ---------------------------------------------------------------------------
+  // Setup FE
+  // ---------------------------------------------------------------------------
+  SetupFE(comm, dm);
 
   // ---------------------------------------------------------------------------
   // Create local Force vector
@@ -153,19 +157,17 @@ int main(int argc, char **argv) {
   SNES snes;
   KSP ksp;
   Vec U;
-  op_apply_ctx->comm = comm;
   PetscCall( SNESCreate(comm, &snes) );
   PetscCall( SNESGetKSP(snes, &ksp) );
-  PetscCall( SetupCommonCtx(dm, ceed, ceed_data, op_apply_ctx) );
-  PetscCall( PDESolver(ceed_data, vec_type, snes, ksp, F, &U, op_apply_ctx) );
+  PetscCall( PDESolver(comm, dm, ceed, ceed_data, vec_type, snes, ksp, F, &U) );
   //VecView(U, PETSC_VIEWER_STDOUT_WORLD);
 
   // ---------------------------------------------------------------------------
   // Compute L2 error of mms problem
   // ---------------------------------------------------------------------------
   CeedScalar l2_error_u, l2_error_p;
-  PetscCall( ComputeL2Error(ceed_data, U, target, &l2_error_u, &l2_error_p,
-                            op_apply_ctx) );
+  PetscCall( ComputeL2Error(dm, ceed,ceed_data, U, target, &l2_error_u,
+                            &l2_error_p) );
 
   // ---------------------------------------------------------------------------
   // Print output results
@@ -201,8 +203,6 @@ int main(int argc, char **argv) {
   // -- Structs
   PetscCall( PetscFree(app_ctx) );
   PetscCall( PetscFree(problem_data) );
-  PetscCall( PetscFree(phys_ctx->darcy2d_ctx) );
-  PetscCall( PetscFree(phys_ctx->darcy3d_ctx) );
   PetscCall( PetscFree(phys_ctx) );
   PetscCall( PetscFree(op_apply_ctx) );
 

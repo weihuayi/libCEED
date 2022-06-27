@@ -1,56 +1,21 @@
 #include "../include/setup-dm.h"
 
 // ---------------------------------------------------------------------------
-// Set-up DM
+// Setup DM
 // ---------------------------------------------------------------------------
-PetscErrorCode CreateDistributedDM(MPI_Comm comm, ProblemData problem_data,
-                                   DM *dm) {
-  PetscSection   sec;
-  PetscInt       dofs_per_face;
-  PetscInt       p_start, p_end;
-  PetscInt       c_start, c_end; // cells
-  PetscInt       f_start, f_end; // faces
-  PetscInt       v_start, v_end; // vertices
+PetscErrorCode CreateDM(MPI_Comm comm, VecType vec_type, DM *dm) {
 
   PetscFunctionBeginUser;
 
   // Create DMPLEX
   PetscCall( DMCreate(comm, dm) );
   PetscCall( DMSetType(*dm, DMPLEX) );
+  PetscCall( DMSetVecType(*dm, vec_type) );
   // Set Tensor elements
   PetscCall( PetscOptionsSetValue(NULL, "-dm_plex_simplex", "0") );
   // Set CL options
   PetscCall( DMSetFromOptions(*dm) );
   PetscCall( DMViewFromOptions(*dm, NULL, "-dm_view") );
-
-  // Get plex limits
-  PetscCall( DMPlexGetChart(*dm, &p_start, &p_end) );
-  PetscCall( DMPlexGetHeightStratum(*dm, 0, &c_start, &c_end) );
-  PetscCall( DMPlexGetHeightStratum(*dm, 1, &f_start, &f_end) );
-  PetscCall( DMPlexGetDepthStratum(*dm, 0, &v_start, &v_end) );
-  // Create section
-  PetscCall( PetscSectionCreate(comm, &sec) );
-  PetscCall( PetscSectionSetNumFields(sec, 2) );
-  PetscCall( PetscSectionSetFieldName(sec, 0, "Velocity") );
-  PetscCall( PetscSectionSetFieldComponents(sec, 0, 1) );
-  PetscCall( PetscSectionSetFieldName(sec, 1, "Pressure") );
-  PetscCall( PetscSectionSetFieldComponents(sec, 1, 1) );
-  PetscCall( PetscSectionSetChart(sec, p_start, p_end) );
-  // Setup dofs per face for velocity field
-  for (PetscInt f = f_start; f < f_end; f++) {
-    PetscCall( DMPlexGetConeSize(*dm, f, &dofs_per_face) );
-    PetscCall( PetscSectionSetFieldDof(sec, f, 0, dofs_per_face) );
-    PetscCall( PetscSectionSetDof     (sec, f, dofs_per_face) );
-  }
-  // Setup 1 dof per cell for pressure field
-  for(PetscInt c = c_start; c < c_end; c++) {
-    PetscCall( PetscSectionSetFieldDof(sec, c, 1, 1) );
-    PetscCall( PetscSectionSetDof     (sec, c, 1) );
-  }
-  PetscCall( PetscSectionSetUp(sec) );
-  PetscCall( DMSetSection(*dm,sec) );
-  PetscCall( DMCreateDS(*dm) );
-  PetscCall( PetscSectionDestroy(&sec) );
 
   PetscFunctionReturn(0);
 };

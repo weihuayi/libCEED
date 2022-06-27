@@ -15,38 +15,23 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 /// @file
-/// Darcy problem 3D (hex element) using PETSc
+/// Darcy problem 2D (quad element) using PETSc
 
-#ifndef DARCY_MASS3D_H
-#define DARCY_MASS3D_H
+#ifndef DARCY_SYSTEM2D_H
+#define DARCY_SYSTEM2D_H
 
 #include <math.h>
-
-// -----------------------------------------------------------------------------
-// Compute determinant of 3x3 matrix
-// -----------------------------------------------------------------------------
-#ifndef DetMat
-#define DetMat
-CEED_QFUNCTION_HELPER CeedScalar ComputeDetMat(const CeedScalar A[3][3]) {
-  // Compute det(A)
-  const CeedScalar B11 = A[1][1]*A[2][2] - A[1][2]*A[2][1];
-  const CeedScalar B12 = A[0][2]*A[2][1] - A[0][1]*A[2][2];
-  const CeedScalar B13 = A[0][1]*A[1][2] - A[0][2]*A[1][1];
-  CeedScalar detA = A[0][0]*B11 + A[1][0]*B12 + A[2][0]*B13;
-
-  return detA;
-};
-#endif
+#include "utils.h"
 
 // -----------------------------------------------------------------------------
 // Strong form:
-//  u       = -\grad(p)      on \Omega
+//  u       = -K * \grad(p)  on \Omega
 //  \div(u) = f              on \Omega
 //  p = p0                   on \Gamma_D
 //  u.n = g                  on \Gamma_N
 // Weak form: Find (u,p) \in VxQ (V=H(div), Q=L^2) on \Omega
-//  (v, u) - (\div(v), p) = -<v, p0 n>_{\Gamma_D}
-// -(q, \div(u))          = -(q, f)
+//  (v, K^{-1}*u) - (\div(v), p) = -<v, p0 n>_{\Gamma_D}
+// -(q, \div(u))                 = -(q, f)
 // This QFunction setup the mixed form of the above equation
 // Inputs:
 //   w     : weight of quadrature
@@ -56,26 +41,32 @@ CEED_QFUNCTION_HELPER CeedScalar ComputeDetMat(const CeedScalar A[3][3]) {
 //   p     : basis_p at quadrature points
 //
 // Output:
-//   v     : (v,u) = \int (v^T * u detJ*w) ==> \int (v^T J^T*J*u*w/detJ)
+// Note we need to apply Piola map on the basis_u, which is J*u/detJ
+//   v     : (v, K^{-1} * u) = \int (v^T * K^{-1} u detJ*w) ==> \int (v^T J^T*K^{-1}*J*u*w/detJ)
 // div(v)  : -(\div(v), p) = -\int (div(v)^T * p *w)
 //   q     : -(q, \div(u)) = -\int (q^T * div(u) *w)
 // which create the following coupled system
 //                            D = [ M  B^T ]
 //                                [ B   0  ]
-// M = (v,u), B = -(q, \div(u))
-// Note we need to apply Piola map on the basis_u, which is J*u/detJ
-// So (v,u) = \int (v^T * u detJ*w) ==> \int (v^T J^T*J*u*w/detJ)
+// M = (v, K^{-1} * u), B = -(q, \div(u))
 // -----------------------------------------------------------------------------
+#ifndef DARCY_CTX
+#define DARCY_CTX
+typedef struct DARCYContext_ *DARCYContext;
+struct DARCYContext_ {
+  CeedScalar kappa;
+};
+#endif
 // -----------------------------------------------------------------------------
 // Residual evaluation for Darcy problem
 // -----------------------------------------------------------------------------
-CEED_QFUNCTION(DarcyMass3D)(void *ctx, CeedInt Q,
-                            const CeedScalar *const *in,
-                            CeedScalar *const *out) {
+CEED_QFUNCTION(DarcySystem2D)(void *ctx, CeedInt Q,
+                              const CeedScalar *const *in,
+                              CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
   const CeedScalar (*w) = in[0],
-                   (*dxdX)[3][CEED_Q_VLA] = (const CeedScalar(*)[3][CEED_Q_VLA])in[1],
+                   (*dxdX)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[1],
                    (*u)[CEED_Q_VLA] = (const CeedScalar(*)[CEED_Q_VLA])in[2],
                    (*div_u) = (const CeedScalar(*))in[3],
                    (*p) = (const CeedScalar(*))in[4];
@@ -84,33 +75,41 @@ CEED_QFUNCTION(DarcyMass3D)(void *ctx, CeedInt Q,
   CeedScalar (*v)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])out[0],
              (*div_v) = (CeedScalar(*))out[1],
              (*q) = (CeedScalar(*))out[2];
-  // *INDENT-ON*
-
+  // Context
+  DARCYContext  context = (DARCYContext)ctx;
+  const CeedScalar    kappa   = context->kappa;
   // Quadrature Point Loop
   CeedPragmaSIMD
   for (CeedInt i=0; i<Q; i++) {
     // *INDENT-OFF*
     // Setup, J = dx/dX
-    const CeedScalar J[3][3] = {{dxdX[0][0][i], dxdX[1][0][i], dxdX[2][0][i]},
-                                {dxdX[0][1][i], dxdX[1][1][i], dxdX[2][1][i]},
-                                {dxdX[0][2][i], dxdX[1][2][i], dxdX[2][2][i]}};
-    const CeedScalar detJ = ComputeDetMat(J);
+    const CeedScalar J[2][2] = {{dxdX[0][0][i], dxdX[1][0][i]},
+                                {dxdX[0][1][i], dxdX[1][1][i]}};
+    const CeedScalar det_J = MatDet2x2(J);
+
     // *INDENT-ON*
-    // Piola map: J^T*J*u*w/detJ
-    // 1) Compute J^T * J
-    CeedScalar JTJ[3][3];
-    for (CeedInt j = 0; j < 3; j++) {
-      for (CeedInt k = 0; k < 3; k++) {
-        JTJ[j][k] = 0;
-        for (CeedInt m = 0; m < 3; m++)
-          JTJ[j][k] += J[m][j] * J[m][k];
-      }
-    }
-    // 2) Compute J^T*J*u * w /detJ
-    for (CeedInt k = 0; k < 3; k++) {
-      v[k][i] = 0;
-      for (CeedInt m = 0; m < 3; m++)
-        v[k][i] += JTJ[k][m] * u[m][i] * w[i]/detJ;
+    // Piola map: J^T*K^{-1}*J*u*w/detJ
+    // 1) Compute K^{-1}, note K = kappa*I
+    CeedScalar K[2][2] = {{kappa, 0.},{0., kappa}};
+    const CeedScalar det_K = MatDet2x2(K);
+    CeedScalar K_inv[2][2];
+    MatInverse2x2(K, det_K, K_inv);
+
+    // 2) Compute K^{-1}*J
+    CeedScalar Kinv_J[2][2];
+    AlphaMatMatMult2x2(1., K_inv, J, Kinv_J);
+
+    // 3) Compute J^T * (K^{-1}*J)
+    CeedScalar JT_Kinv_J[2][2];
+    AlphaMatTransposeMatMult2x2(1, J, Kinv_J, JT_Kinv_J);
+
+    // 4) Compute (J^T*K^{-1}*J) * u * w /detJ
+    CeedScalar u1[2] = {u[0][i], u[1][i]}, v1[2];
+    AlphaMatVecMult2x2(w[i]/det_J, JT_Kinv_J, u1, v1);
+
+    // Output at quadrature points
+    for (CeedInt k = 0; k < 2; k++) {
+      v[k][i] = v1[k];
     }
 
     div_v[i] = -p[i] * w[i];
@@ -123,13 +122,13 @@ CEED_QFUNCTION(DarcyMass3D)(void *ctx, CeedInt Q,
 // -----------------------------------------------------------------------------
 // Jacobian evaluation for Darcy problem
 // -----------------------------------------------------------------------------
-CEED_QFUNCTION(JacobianDarcyMass3D)(void *ctx, CeedInt Q,
-                                    const CeedScalar *const *in,
-                                    CeedScalar *const *out) {
+CEED_QFUNCTION(JacobianDarcySystem2D)(void *ctx, CeedInt Q,
+                                      const CeedScalar *const *in,
+                                      CeedScalar *const *out) {
   // *INDENT-OFF*
   // Inputs
   const CeedScalar (*w) = in[0],
-                   (*dxdX)[3][CEED_Q_VLA] = (const CeedScalar(*)[3][CEED_Q_VLA])in[1],
+                   (*dxdX)[2][CEED_Q_VLA] = (const CeedScalar(*)[2][CEED_Q_VLA])in[1],
                    (*du)[CEED_Q_VLA] = (const CeedScalar(*)[CEED_Q_VLA])in[2],
                    (*div_du) = (const CeedScalar(*))in[3],
                    (*dp) = (const CeedScalar(*))in[4];
@@ -138,33 +137,42 @@ CEED_QFUNCTION(JacobianDarcyMass3D)(void *ctx, CeedInt Q,
   CeedScalar (*dv)[CEED_Q_VLA] = (CeedScalar(*)[CEED_Q_VLA])out[0],
              (*div_dv) = (CeedScalar(*))out[1],
              (*dq) = (CeedScalar(*))out[2];
-  // *INDENT-ON*
 
+  // *INDENT-ON*
+  DARCYContext  context = (DARCYContext)ctx;
+  const CeedScalar    kappa   = context->kappa;
   // Quadrature Point Loop
   CeedPragmaSIMD
   for (CeedInt i=0; i<Q; i++) {
     // *INDENT-OFF*
     // Setup, J = dx/dX
-    const CeedScalar J[3][3] = {{dxdX[0][0][i], dxdX[1][0][i], dxdX[2][0][i]},
-                                {dxdX[0][1][i], dxdX[1][1][i], dxdX[2][1][i]},
-                                {dxdX[0][2][i], dxdX[1][2][i], dxdX[2][2][i]}};
-    const CeedScalar detJ = ComputeDetMat(J);
+    const CeedScalar J[2][2] = {{dxdX[0][0][i], dxdX[1][0][i]},
+                                {dxdX[0][1][i], dxdX[1][1][i]}};
+    const CeedScalar det_J = MatDet2x2(J);
+
     // *INDENT-ON*
-    // Piola map: J^T*J*u*w/detJ
-    // 1) Compute J^T * J
-    CeedScalar JTJ[3][3];
-    for (CeedInt j = 0; j < 3; j++) {
-      for (CeedInt k = 0; k < 3; k++) {
-        JTJ[j][k] = 0;
-        for (CeedInt m = 0; m < 3; m++)
-          JTJ[j][k] += J[m][j] * J[m][k];
-      }
-    }
-    // 2) Compute J^T*J*u * w /detJ
-    for (CeedInt k = 0; k < 3; k++) {
-      dv[k][i] = 0;
-      for (CeedInt m = 0; m < 3; m++)
-        dv[k][i] += JTJ[k][m] * du[m][i] * w[i]/detJ;
+    // Piola map: J^T*K^{-1}*J*du*w/detJ
+    // 1) Compute K^{-1}, note K = kappa*I
+    CeedScalar K[2][2] = {{kappa, 0.},{0., kappa}};
+    const CeedScalar det_K = MatDet2x2(K);
+    CeedScalar K_inv[2][2];
+    MatInverse2x2(K, det_K, K_inv);
+
+    // 2) Compute K^{-1}*J
+    CeedScalar Kinv_J[2][2];
+    AlphaMatMatMult2x2(1., K_inv, J, Kinv_J);
+
+    // 3) Compute J^T * (K^{-1}*J)
+    CeedScalar JT_Kinv_J[2][2];
+    AlphaMatTransposeMatMult2x2(1, J, Kinv_J, JT_Kinv_J);
+
+    // 4) Compute (J^T*K^{-1}*J) * du * w /detJ
+    CeedScalar du1[2] = {du[0][i], du[1][i]}, dv1[2];
+    AlphaMatVecMult2x2(w[i]/det_J, JT_Kinv_J, du1, dv1);
+
+    // Output at quadrature points
+    for (CeedInt k = 0; k < 2; k++) {
+      dv[k][i] = dv1[k];
     }
 
     div_dv[i] = -dp[i] * w[i];
@@ -176,4 +184,4 @@ CEED_QFUNCTION(JacobianDarcyMass3D)(void *ctx, CeedInt Q,
 
 // -----------------------------------------------------------------------------
 
-#endif //End of DARCY_MASS3D_H
+#endif //End of DARCY_MASS2D_H

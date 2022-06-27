@@ -1,5 +1,5 @@
-#ifndef setupdm_h
-#define setupdm_h
+#ifndef setupfe_h
+#define setupfe_h
 
 #include <petsc.h>
 #include <petscdmplex.h>
@@ -8,8 +8,8 @@
 #include "structs.h"
 
 // ---------------------------------------------------------------------------
-// Setup DM
+// Setup FE
 // ---------------------------------------------------------------------------
-PetscErrorCode CreateDM(MPI_Comm comm, VecType vec_type, DM *dm);
+PetscErrorCode SetupFE(MPI_Comm comm, DM dm);
 
-#endif // setupdm_h
+#endif // setupfe_h

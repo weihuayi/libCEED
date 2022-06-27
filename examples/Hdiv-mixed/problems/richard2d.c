@@ -15,22 +15,20 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 /// @file
-/// Utility functions for setting up Darcy problem in 2D
+/// Utility functions for setting up Richard problem in 2D
 
 #include "../include/register-problem.h"
-#include "../qfunctions/darcy-force2d.h"
-#include "../qfunctions/darcy-system2d.h"
-#include "../qfunctions/darcy-error2d.h"
+#include "../qfunctions/richard-system2d.h"
 #include "../qfunctions/pressure-boundary2d.h"
 
-PetscErrorCode Hdiv_DARCY2D(Ceed ceed, ProblemData problem_data, void *ctx) {
+PetscErrorCode Hdiv_RICHARD2D(Ceed ceed, ProblemData problem_data, void *ctx) {
   AppCtx               app_ctx = *(AppCtx *)ctx;
-  DARCYContext         darcy_ctx;
-  CeedQFunctionContext darcy_context;
+  //RICHARDContext       richard_ctx;
+  //CeedQFunctionContext richard_context;
 
   PetscFunctionBeginUser;
 
-  PetscCall( PetscCalloc1(1, &darcy_ctx) );
+  //PetscCall( PetscCalloc1(1, &richard_ctx) );
 
   // ------------------------------------------------------
   //               SET UP POISSON_QUAD2D
@@ -39,33 +37,23 @@ PetscErrorCode Hdiv_DARCY2D(Ceed ceed, ProblemData problem_data, void *ctx) {
   problem_data->elem_node               = 4;
   problem_data->q_data_size_face        = 3;
   problem_data->quadrature_mode         = CEED_GAUSS;
-  problem_data->force                   = DarcyForce2D;
-  problem_data->force_loc               = DarcyForce2D_loc;
-  problem_data->residual                = DarcySystem2D;
-  problem_data->residual_loc            = DarcySystem2D_loc;
-  problem_data->jacobian                = JacobianDarcySystem2D;
-  problem_data->jacobian_loc            = JacobianDarcySystem2D_loc;
-  problem_data->error                   = DarcyError2D;
-  problem_data->error_loc               = DarcyError2D_loc;
+  //problem_data->force                   = DarcyForce2D;
+  //problem_data->force_loc               = DarcyForce2D_loc;
+  problem_data->residual                = RichardSystem2D;
+  problem_data->residual_loc            = RichardSystem2D_loc;
+  problem_data->jacobian                = JacobianRichardSystem2D;
+  problem_data->jacobian_loc            = JacobianRichardSystem2D_loc;
+  //problem_data->error                   = DarcyError2D;
+  //problem_data->error_loc               = DarcyError2D_loc;
   problem_data->bc_pressure             = BCPressure2D;
   problem_data->bc_pressure_loc         = BCPressure2D_loc;
 
   // ------------------------------------------------------
   //              Command line Options
   // ------------------------------------------------------
-  CeedScalar kappa = 1.;
   PetscOptionsBegin(app_ctx->comm, NULL, "Options for Hdiv-mixed problem", NULL);
-  PetscCall( PetscOptionsScalar("-kappa", "Hydraulic Conductivity", NULL,
-                                kappa, &kappa, NULL));
   PetscOptionsEnd();
 
-  darcy_ctx->kappa = kappa;
-  CeedQFunctionContextCreate(ceed, &darcy_context);
-  CeedQFunctionContextSetData(darcy_context, CEED_MEM_HOST, CEED_COPY_VALUES,
-                              sizeof(*darcy_ctx), darcy_ctx);
-  problem_data->qfunction_context = darcy_context;
-  CeedQFunctionContextSetDataDestroy(darcy_context, CEED_MEM_HOST,
-                                     FreeContextPetsc);
-  //PetscCall( PetscFree(darcy_ctx) );
+  //PetscCall( PetscFree(richard_ctx) );
   PetscFunctionReturn(0);
 }

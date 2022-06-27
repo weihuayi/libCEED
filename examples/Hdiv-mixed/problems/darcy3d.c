@@ -19,17 +19,18 @@
 
 #include "../include/register-problem.h"
 #include "../qfunctions/darcy-force3d.h"
-#include "../qfunctions/darcy-mass3d.h"
+#include "../qfunctions/darcy-system3d.h"
 #include "../qfunctions/darcy-error3d.h"
 #include "../qfunctions/pressure-boundary3d.h"
 
-// Hdiv_DARCY3D is registered in cl-option.c
-PetscErrorCode Hdiv_DARCY3D(ProblemData problem_data, void *ctx) {
-  Physics           phys = *(Physics *)ctx;
-  MPI_Comm          comm = PETSC_COMM_WORLD;
+PetscErrorCode Hdiv_DARCY3D(Ceed ceed, ProblemData problem_data, void *ctx) {
+  AppCtx            app_ctx = *(AppCtx *)ctx;
+  DARCYContext         darcy_ctx;
+  CeedQFunctionContext darcy_context;
+
   PetscFunctionBeginUser;
 
-  PetscCall( PetscCalloc1(1, &phys->darcy3d_ctx) );
+  PetscCall( PetscCalloc1(1, &darcy_ctx) );
 
   // ------------------------------------------------------
   //               SET UP POISSON_QUAD2D
@@ -40,21 +41,31 @@ PetscErrorCode Hdiv_DARCY3D(ProblemData problem_data, void *ctx) {
   problem_data->quadrature_mode         = CEED_GAUSS;
   problem_data->force                   = DarcyForce3D;
   problem_data->force_loc               = DarcyForce3D_loc;
-  problem_data->residual                = DarcyMass3D;
-  problem_data->residual_loc            = DarcyMass3D_loc;
-  problem_data->jacobian                = JacobianDarcyMass3D;
-  problem_data->jacobian_loc            = JacobianDarcyMass3D_loc;
+  problem_data->residual                = DarcySystem3D;
+  problem_data->residual_loc            = DarcySystem3D_loc;
+  problem_data->jacobian                = JacobianDarcySystem3D;
+  problem_data->jacobian_loc            = JacobianDarcySystem3D_loc;
   problem_data->error                   = DarcyError3D;
   problem_data->error_loc               = DarcyError3D_loc;
   problem_data->bc_pressure             = BCPressure3D;
   problem_data->bc_pressure_loc         = BCPressure3D_loc;
+
   // ------------------------------------------------------
   //              Command line Options
   // ------------------------------------------------------
-  PetscOptionsBegin(comm, NULL, "Options for Hdiv-mixed problem", NULL);
-
+  CeedScalar kappa = 1.;
+  PetscOptionsBegin(app_ctx->comm, NULL, "Options for Hdiv-mixed problem", NULL);
+  PetscCall( PetscOptionsScalar("-kappa", "Hydraulic Conductivity", NULL,
+                                kappa, &kappa, NULL));
   PetscOptionsEnd();
-  PetscCall( PetscFree(phys->darcy3d_ctx) );
+
+  darcy_ctx->kappa = kappa;
+  CeedQFunctionContextCreate(ceed, &darcy_context);
+  CeedQFunctionContextSetData(darcy_context, CEED_MEM_HOST, CEED_COPY_VALUES,
+                              sizeof(*darcy_ctx), darcy_ctx);
+  problem_data->qfunction_context = darcy_context;
+  CeedQFunctionContextSetDataDestroy(darcy_context, CEED_MEM_HOST,
+                                     FreeContextPetsc);
 
   PetscFunctionReturn(0);
 }

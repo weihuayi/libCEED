@@ -4,6 +4,7 @@
 
 #include "include/setup-libceed.h"
 #include "include/setup-dm.h"
+#include "include/setup-fe.h"
 #include "include/setup-boundary.h"
 #include "include/cl-options.h"
 #include "include/register-problem.h"

@@ -21,19 +21,17 @@
 #define DARCY_FORCE2D_H
 
 #include <math.h>
+#include "utils.h"
 
-#ifndef M_PI
-#define M_PI    3.14159265358979323846
-#endif
 // -----------------------------------------------------------------------------
 // Strong form:
-//  u       = -\grad(p)      on \Omega
+//  u       = -K * \grad(p)  on \Omega
 //  \div(u) = f              on \Omega
 //  p = p0                   on \Gamma_D
 //  u.n = g                  on \Gamma_N
 // Weak form: Find (u,p) \in VxQ (V=H(div), Q=L^2) on \Omega
-//  (v, u) - (\div(v), p) = -<v, p0 n>_{\Gamma_D}
-// -(q, \div(u))          = -(q, f)
+//  (v, K^{-1}*u) - (\div(v), p) = -<v, p0 n>_{\Gamma_D}
+// -(q, \div(u))                 = -(q, f)
 // This QFunction sets up the force and true solution for the above problem
 // Inputs:
 //   x     : interpolation of the physical coordinate
@@ -44,6 +42,13 @@
 //   force_u     : which is 0.0 for this problem (-<v, p0 n> is in pressure-boundary qfunction)
 //   force_p     : -(q, f) = -\int( q * f * w*detJ)dx
 // -----------------------------------------------------------------------------
+#ifndef DARCY_CTX
+#define DARCY_CTX
+typedef struct DARCYContext_ *DARCYContext;
+struct DARCYContext_ {
+  CeedScalar kappa;
+};
+#endif
 CEED_QFUNCTION(DarcyForce2D)(void *ctx, const CeedInt Q,
                              const CeedScalar *const *in,
                              CeedScalar *const *out) {
@@ -55,7 +60,9 @@ CEED_QFUNCTION(DarcyForce2D)(void *ctx, const CeedInt Q,
   // Outputs
   CeedScalar (*rhs_u) = out[0], (*rhs_p) = out[1],
              (*true_soln) = out[2];
-
+  // Context
+  DARCYContext  context = (DARCYContext)ctx;
+  const CeedScalar    kappa   = context->kappa;
   // Quadrature Point Loop
   CeedPragmaSIMD
   for (CeedInt i=0; i<Q; i++) {
@@ -63,18 +70,21 @@ CEED_QFUNCTION(DarcyForce2D)(void *ctx, const CeedInt Q,
     CeedScalar x = coords[i+0*Q], y = coords[i+1*Q];
     const CeedScalar J[2][2] = {{dxdX[0][0][i], dxdX[1][0][i]},
                                 {dxdX[0][1][i], dxdX[1][1][i]}};
-    const CeedScalar detJ = J[1][1]*J[0][0] - J[1][0]*J[0][1];
+    const CeedScalar det_J = MatDet2x2(J);
     // *INDENT-ON*
-    CeedScalar pe = sin(M_PI*x) * sin(M_PI*y) + M_PI*x*y;
-    CeedScalar ue[2] = {-M_PI*cos(M_PI*x) *sin(M_PI*y) - M_PI*y, -M_PI*sin(M_PI*x) *cos(M_PI*y) - M_PI*x};
-    CeedScalar f = 2*M_PI*M_PI*sin(M_PI*x)*sin(M_PI*y);
+    CeedScalar pe = sin(PI_DOUBLE*x) * sin(PI_DOUBLE*y);
+    CeedScalar grad_pe[2] = {PI_DOUBLE*cos(PI_DOUBLE*x) *sin(PI_DOUBLE*y), PI_DOUBLE*sin(PI_DOUBLE*x) *cos(PI_DOUBLE*y)};
+    CeedScalar K[2][2] = {{kappa, 0.},{0., kappa}};
+    CeedScalar ue[2];
+    AlphaMatVecMult2x2(-1., K, grad_pe, ue);
+    CeedScalar f = 2*PI_DOUBLE*PI_DOUBLE*sin(PI_DOUBLE*x)*sin(PI_DOUBLE*y);
 
     // 1st eq: component 1
     rhs_u[i+0*Q] = 0.;
     // 1st eq: component 2
     rhs_u[i+1*Q] = 0.;
     // 2nd eq
-    rhs_p[i] = -f*w[i]*detJ;
+    rhs_p[i] = -f*w[i]*det_J;
     // True solution Ue=[p,u]
     true_soln[i+0*Q] = pe;
     true_soln[i+1*Q] = ue[0];
