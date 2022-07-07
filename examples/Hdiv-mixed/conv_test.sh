@@ -44,7 +44,7 @@ declare -A run_flags
 declare -A test_flags
     test_flags[res_start]=2
     test_flags[res_stride]=1
-    test_flags[res_end]=6
+    test_flags[res_end]=12
 
 file_name=conv_test_result.csv
 

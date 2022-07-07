@@ -107,6 +107,9 @@ int main(int argc, char **argv) {
   // ---------------------------------------------------------------------------
   DM             dm;
   PetscCall( CreateDM(comm, vec_type, &dm) );
+  // TODO: add mesh option
+  // perturb to have smooth random mesh
+  PetscCall( PerturbVerticesSmooth(dm) );
 
   // ---------------------------------------------------------------------------
   // Setup FE
